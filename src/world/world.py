@@ -249,11 +249,16 @@ class World:
             char._world_ref = self  # Give characters access to world for AI
             char.update(dt)
         
+        # Auto-revive downed allies when out of combat
+        self._check_auto_revive()
+        
         # Apply entity separation (prevent stacking/blocking)
         all_entities = self.characters + self.enemies
         for entity in all_entities:
             if hasattr(entity, 'health') and entity.health <= 0:
                 continue
+            if getattr(entity, 'is_downed', False):
+                continue  # Don't push downed characters
             entity.apply_separation(all_entities, dt)
             
             # Also push away from walls
@@ -292,4 +297,40 @@ class World:
         if abs(push_x) > 0.01 or abs(push_y) > 0.01:
             entity.x += push_x * dt
             entity.y += push_y * dt
+    
+    def _check_auto_revive(self):
+        """Auto-revive downed allies when no enemies are nearby."""
+        # Find downed characters
+        downed = [c for c in self.characters if getattr(c, 'is_downed', False)]
+        if not downed:
+            return
+        
+        # Find alive characters
+        alive = [c for c in self.characters if not getattr(c, 'is_downed', False) and c.health > 0]
+        if not alive:
+            return
+        
+        # Check if any enemy is within aggro range of any alive character
+        aggro_range = 6.0
+        enemies_nearby = False
+        for char in alive:
+            for enemy in self.enemies:
+                if enemy.health <= 0:
+                    continue
+                dist = ((char.x - enemy.x) ** 2 + (char.y - enemy.y) ** 2) ** 0.5
+                if dist < aggro_range:
+                    enemies_nearby = True
+                    break
+            if enemies_nearby:
+                break
+        
+        # If no enemies nearby, revive downed allies
+        if not enemies_nearby:
+            for downed_char in downed:
+                # Check if an alive character is close enough to revive
+                for helper in alive:
+                    dist = ((helper.x - downed_char.x) ** 2 + (helper.y - downed_char.y) ** 2) ** 0.5
+                    if dist < 3.0:
+                        downed_char.revive(50)  # Revive at 50% health
+                        break
 

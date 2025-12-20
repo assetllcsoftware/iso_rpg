@@ -178,7 +178,7 @@ class SpellBoltEffect(Effect):
         dx = target_x - start_x
         dy = target_y - start_y
         distance = math.sqrt(dx * dx + dy * dy)
-        duration = max(0.2, min(0.5, distance / 12))
+        duration = max(0.2, min(0.5, distance / 8))  # Slower travel
         
         super().__init__(start_x, start_y, duration=duration)
         self.start_x = start_x
@@ -189,6 +189,12 @@ class SpellBoltEffect(Effect):
         
         self.particles = []
         self.angle = math.atan2(dy, dx)
+        
+        # For delayed impact
+        self.spawn_impact_on_finish = False
+        self.impact_color = color
+        self.effects_manager = None
+        self.impact_spawned = False
     
     def update(self, dt):
         super().update(dt)
@@ -196,6 +202,12 @@ class SpellBoltEffect(Effect):
         progress = self.progress
         self.x = self.start_x + (self.target_x - self.start_x) * progress
         self.y = self.start_y + (self.target_y - self.start_y) * progress
+        
+        # Spawn impact when bolt reaches target
+        if not self.active and self.spawn_impact_on_finish and not self.impact_spawned:
+            if self.effects_manager:
+                self.effects_manager.spawn_impact(self.target_x, self.target_y, self.impact_color, 0.8)
+            self.impact_spawned = True
         
         # Spawn particles
         if random.random() < 0.8:
@@ -417,6 +429,14 @@ class EffectsManager:
     def spawn_impact(self, x, y, color=(255, 200, 100), size=1.0):
         """Spawn an impact effect."""
         self.effects.append(ImpactEffect(x, y, color, size))
+    
+    def spawn_spell_attack(self, start_x, start_y, target_x, target_y, color=(255, 100, 50)):
+        """Spawn a spell attack effect (for ally spellcasting)."""
+        bolt = SpellBoltEffect(start_x, start_y, target_x, target_y, color=color)
+        bolt.spawn_impact_on_finish = True
+        bolt.impact_color = color
+        bolt.effects_manager = self
+        self.effects.append(bolt)
     
     def update(self, dt):
         """Update all effects."""

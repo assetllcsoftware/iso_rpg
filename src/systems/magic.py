@@ -20,6 +20,10 @@ class Spell:
         self.cooldown = 1.0
         self.duration = 0  # For buffs/debuffs
         
+        # Special flags
+        self.heals_party = False  # Heals party members instead of targeting
+        self.revives = False  # Can revive downed allies
+        
         # Visual
         self.color = (100, 100, 255)
         self.description = ""
@@ -110,22 +114,36 @@ NATURE_SPELLS = {
         'name': 'Heal',
         'mana_cost': 10,
         'heal_amount': 30,
-        'range': 6.0,
+        'range': 0,  # Self-centered
+        'area_radius': 4.0,  # Heals caster + nearby allies
         'cooldown': 1.5,
         'level_req': 0,
         'color': (100, 255, 100),
-        'description': 'Heals a single target.',
+        'description': 'Heals you and nearby allies.',
+        'heals_party': True,
     },
     'group_heal': {
         'name': 'Group Heal',
         'mana_cost': 25,
-        'heal_amount': 20,
+        'heal_amount': 25,
         'range': 0,
-        'area_radius': 5.0,
+        'area_radius': 6.0,
         'cooldown': 4.0,
         'level_req': 5,
         'color': (150, 255, 150),
-        'description': 'Heals all nearby party members.',
+        'description': 'Powerful heal for all nearby party members.',
+        'heals_party': True,
+    },
+    'revive': {
+        'name': 'Revive',
+        'mana_cost': 35,
+        'heal_amount': 50,  # % of max health restored
+        'range': 3.0,
+        'cooldown': 10.0,
+        'level_req': 3,
+        'color': (255, 255, 150),
+        'description': 'Revives a downed ally.',
+        'revives': True,
     },
     'regeneration': {
         'name': 'Regeneration',
@@ -193,6 +211,8 @@ def create_spell(spell_id):
     spell.duration = data.get('duration', 0)
     spell.color = data.get('color', (100, 100, 255))
     spell.description = data.get('description', '')
+    spell.heals_party = data.get('heals_party', False)
+    spell.revives = data.get('revives', False)
     
     return spell
 
@@ -305,9 +325,26 @@ class MagicSystem:
         # Gain skill XP
         caster.gain_skill_xp(spell.skill_type, 15)
         
+        # Handle revive spell
+        if spell.revives:
+            # Find downed ally near target
+            for char in world.characters:
+                if hasattr(char, 'is_downed') and char.is_downed:
+                    if char.distance_to(target_pos) <= spell.range:
+                        char.revive(spell.heal_amount)
+                        return spell
+            return spell  # No downed ally found, spell still consumed
+        
         # Find targets
         targets = []
-        if spell.area_radius > 0:
+        if spell.heals_party:
+            # Party heal - heal caster and all nearby allies
+            targets = [caster]  # Always include caster
+            for char in world.characters:
+                if char != caster and not getattr(char, 'is_downed', False):
+                    if char.distance_to(caster) <= spell.area_radius:
+                        targets.append(char)
+        elif spell.area_radius > 0:
             # AoE spell
             if spell.damage > 0:
                 targets = world.get_enemies_in_range(

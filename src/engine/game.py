@@ -14,6 +14,7 @@ from ..ui.touch_controls import TouchControls
 from ..ui.inventory import InventoryUI
 from ..ui.action_bar import ActionBar
 from ..ui.skill_tree import SkillTreeUI
+from ..ui.town import TownScene, PortalButton
 from ..systems.audio import audio
 from ..systems.magic import MagicSystem, SpellBook, Spell
 from ..systems.effects import EffectsManager
@@ -45,6 +46,9 @@ class Game:
         self.effects = EffectsManager()
         self.action_bar = ActionBar(self.screen)
         self.skill_tree = SkillTreeUI(self.screen)
+        self.town_scene = TownScene(SCREEN_WIDTH, SCREEN_HEIGHT)
+        self.in_town = False
+        self.portal_button = PortalButton(SCREEN_WIDTH - 70, SCREEN_HEIGHT - 130)
         self.audio = audio
         
         # Keyboard movement state
@@ -97,6 +101,7 @@ class Game:
         hero.spellbook = SpellBook()
         hero.spellbook.learn_spell('fireball')
         hero.spellbook.learn_spell('heal')
+        hero.spellbook.learn_spell('revive')  # Needs Nature Magic 3 to cast
         
         # Starting equipment
         sword = create_weapon('short_sword', level=1)
@@ -112,6 +117,20 @@ class Game:
             potion = create_potion('mana', level=1)
             if potion:
                 hero.inventory.append(potion)
+        
+        # Some starter equipment to sell/use
+        extra_sword = create_weapon('short_sword', level=1)
+        if extra_sword:
+            hero.inventory.append(extra_sword)
+        bow = create_weapon('bow', level=1)
+        if bow:
+            hero.inventory.append(bow)
+        helm = create_armor('leather_helm', level=1)
+        if helm:
+            hero.inventory.append(helm)
+        boots = create_armor('leather_boots', level=1)
+        if boots:
+            hero.inventory.append(boots)
         
         self.party.append(hero)
         
@@ -133,7 +152,7 @@ class Game:
         
         # Mage skills start higher in magic
         companion.skills[SKILL_COMBAT_MAGIC] = 3
-        companion.skills[SKILL_NATURE_MAGIC] = 2
+        companion.skills[SKILL_NATURE_MAGIC] = 3  # Can cast revive
         companion.skills[SKILL_MELEE] = 1
         companion.skills[SKILL_RANGED] = 1
         
@@ -142,6 +161,7 @@ class Game:
         companion.spellbook.learn_spell('fireball')
         companion.spellbook.learn_spell('ice_shard')
         companion.spellbook.learn_spell('heal')
+        companion.spellbook.learn_spell('revive')
         
         # Companion equipment - staff
         staff = create_weapon('staff', level=1)
@@ -157,6 +177,14 @@ class Game:
             potion = create_potion('mana', level=1)
             if potion:
                 companion.inventory.append(potion)
+        
+        # Lyra's spare gear
+        extra_staff = create_weapon('staff', level=1)
+        if extra_staff:
+            companion.inventory.append(extra_staff)
+        robe = create_armor('leather_chest', level=1)
+        if robe:
+            companion.inventory.append(robe)
         
         self.party.append(companion)
         
@@ -206,6 +234,13 @@ class Game:
             if event.type == pygame.QUIT:
                 self.running = False
             
+            # Town scene has highest priority when active
+            if self.in_town and self.selected_character:
+                result = self.town_scene.handle_event(event, self.selected_character)
+                if result == 'exit':
+                    self._exit_town()
+                continue
+            
             elif event.type == pygame.KEYDOWN:
                 # Skill tree gets priority for key events when visible
                 if self.skill_tree.visible:
@@ -234,6 +269,26 @@ class Game:
                     self.keys_held['left'] = False
                 elif event.key == pygame.K_RIGHT:
                     self.keys_held['right'] = False
+            
+            elif event.type == pygame.MOUSEBUTTONDOWN:
+                # Check portal button click
+                mx, my = event.pos
+                if self.portal_button.handle_click(mx, my):
+                    self._enter_town()
+                    continue
+                
+                # Inventory UI gets first crack at events
+                if self.inventory_ui.visible and self.selected_character:
+                    if self.inventory_ui.handle_event(event, self.selected_character, self.action_bar):
+                        continue
+                
+                # Don't process mouse/touch when skill tree is open
+                if self.skill_tree.visible:
+                    continue
+                
+                action = self.touch.handle_event(event)
+                if action:
+                    self._handle_touch_action(action)
             
             else:
                 # Inventory UI gets first crack at events
@@ -366,10 +421,13 @@ class Game:
         elif key == pygame.K_r:
             self._cast_spell('lightning')
         elif key == pygame.K_i:
+            self.inventory_ui.set_party(self.party, 0)
             self.inventory_ui.toggle()
         elif key == pygame.K_c:
+            self.inventory_ui.set_party(self.party, 0)
             self.inventory_ui.toggle()  # Character sheet
         elif key == pygame.K_k:
+            self.skill_tree.set_party(self.party, 0)
             self.skill_tree.toggle()  # Skill tree
         elif key in (pygame.K_g, pygame.K_f):
             self._pickup_nearby_items()
@@ -715,19 +773,49 @@ class Game:
         except Exception as e:
             self.add_notification(f"Load failed: {e}", (200, 100, 100))
     
+    def _enter_town(self):
+        """Enter town from dungeon."""
+        if self.selected_character:
+            # Store dungeon position for return
+            self._dungeon_pos = (self.selected_character.x, self.selected_character.y)
+            self.in_town = True
+            self.town_scene.enter(self.selected_character, self.party)
+            self.add_notification("Entered Town", (100, 180, 255))
+    
+    def _exit_town(self):
+        """Exit town back to dungeon."""
+        if self.selected_character and hasattr(self, '_dungeon_pos'):
+            self.selected_character.x, self.selected_character.y = self._dungeon_pos
+        self.in_town = False
+        self.town_scene.exit()
+        self.add_notification("Returned to Dungeon", (180, 140, 100))
+    
     def _update(self, dt):
         """Update game state."""
+        # Update town if active
+        if self.in_town:
+            self.town_scene.update(dt, self.selected_character)
+            return
+        
         # Update world
         self.world.update(dt)
         
         # Auto-pickup gold and potions
         self._auto_pickup()
         
-        # Process combat events for enemy attack animations
+        # Process combat events for attack animations
         for event in self.world.combat_events:
             attacker = event['attacker']
             target = event['target']
-            if event['type'] == 'ranged':
+            if event['type'] == 'spell':
+                # Spell effect with custom color
+                spell_color = event.get('spell_color', (255, 100, 50))
+                self.effects.spawn_spell_attack(
+                    attacker.x, attacker.y,
+                    target.x, target.y,
+                    spell_color
+                )
+            elif event['type'] == 'ranged':
                 self.effects.spawn_ranged_attack(
                     attacker.x, attacker.y,
                     target.x, target.y
@@ -752,6 +840,9 @@ class Game:
         
         # Update action bar cooldowns
         self.action_bar.update(dt)
+        
+        # Update portal button animation
+        self.portal_button.update(dt)
         
         # Update camera to follow selected character
         if self.selected_character:
@@ -860,6 +951,12 @@ class Game:
     
     def _render(self):
         """Render everything."""
+        # Render town if active
+        if self.in_town and self.selected_character:
+            self.town_scene.render(self.screen, self.camera, self.selected_character)
+            pygame.display.flip()
+            return
+        
         # Render world
         self.renderer.render_world(self.world, self.camera)
         
@@ -915,6 +1012,10 @@ class Game:
         # Skill tree UI
         if self.skill_tree.visible and self.selected_character:
             self.skill_tree.render(self.selected_character)
+        
+        # Portal button (only visible in dungeon, not in menus)
+        if not self.in_town and not self.inventory_ui.visible and not self.skill_tree.visible:
+            self.portal_button.render(self.screen)
         
         # Pause overlay
         if self.paused:

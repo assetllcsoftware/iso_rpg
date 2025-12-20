@@ -68,6 +68,11 @@ class SkillTreeUI:
         self.visible = False
         self.selected_skill = SKILL_MELEE
         
+        # Party switching
+        self.party = None
+        self.party_index = 0
+        self.viewing_character = None
+        
         # Fonts
         pygame.font.init()
         self.font = pygame.font.Font(None, 24)
@@ -85,13 +90,25 @@ class SkillTreeUI:
         """Toggle visibility."""
         self.visible = not self.visible
     
+    def set_party(self, party, current_index=0):
+        """Set the party reference for switching between members."""
+        self.party = party
+        self.party_index = current_index
+        if party and len(party) > current_index:
+            self.viewing_character = party[current_index]
+    
     def handle_event(self, event):
         """Handle input events."""
         if not self.visible:
             return False
         
         if event.type == pygame.KEYDOWN:
-            if event.key == pygame.K_1:
+            if event.key == pygame.K_TAB and self.party:
+                # Cycle through party members
+                self.party_index = (self.party_index + 1) % len(self.party)
+                self.viewing_character = self.party[self.party_index]
+                return True
+            elif event.key == pygame.K_1:
                 self.selected_skill = SKILL_MELEE
                 return True
             elif event.key == pygame.K_2:
@@ -107,6 +124,26 @@ class SkillTreeUI:
                 self.visible = False
                 return True
         
+        elif event.type == pygame.MOUSEBUTTONDOWN:
+            if event.button == 1 and self.party:
+                # Check party tab clicks
+                if self._handle_party_tab_click(event.pos):
+                    return True
+        
+        return False
+    
+    def _handle_party_tab_click(self, pos):
+        """Check if clicking on party member tabs."""
+        if not self.party:
+            return False
+        
+        tab_y = self.panel_y - 40
+        for i, member in enumerate(self.party):
+            tab_rect = pygame.Rect(self.panel_x + 20 + i * 110, tab_y, 100, 30)
+            if tab_rect.collidepoint(pos):
+                self.party_index = i
+                self.viewing_character = member
+                return True
         return False
     
     def render(self, character):
@@ -114,10 +151,17 @@ class SkillTreeUI:
         if not self.visible:
             return
         
+        # Use viewing_character if set
+        char = self.viewing_character or character
+        
         # Darken background
         overlay = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT), pygame.SRCALPHA)
         overlay.fill((0, 0, 0, 200))
         self.screen.blit(overlay, (0, 0))
+        
+        # Party tabs above main panel
+        if self.party and len(self.party) > 1:
+            self._render_party_tabs()
         
         # Main panel
         panel_rect = pygame.Rect(self.panel_x, self.panel_y, 
@@ -131,22 +175,42 @@ class SkillTreeUI:
         self.screen.blit(title, title_rect)
         
         # Character name
-        char_text = self.font.render(f"{character.name} - Level {character.level}", 
+        char_text = self.font.render(f"{char.name} - Level {char.level}", 
                                       True, COLOR_TEXT)
         self.screen.blit(char_text, (self.panel_x + 20, self.panel_y + 20))
         
         # Skill tabs
-        self._render_tabs(character)
+        self._render_tabs(char)
         
         # Selected skill tree
-        self._render_skill_tree(character)
+        self._render_skill_tree(char)
         
         # Instructions
-        hint = self.font_small.render("Press 1-4 to switch skills, K or ESC to close", 
+        tab_hint = " | TAB to switch characters" if (self.party and len(self.party) > 1) else ""
+        hint = self.font_small.render(f"Press 1-4 to switch skills, K or ESC to close{tab_hint}", 
                                        True, COLOR_TEXT_DIM)
         hint_rect = hint.get_rect(centerx=SCREEN_WIDTH // 2, 
                                    y=self.panel_y + self.panel_height - 25)
         self.screen.blit(hint, hint_rect)
+    
+    def _render_party_tabs(self):
+        """Render party member tabs above the main panel."""
+        tab_y = self.panel_y - 40
+        
+        for i, member in enumerate(self.party):
+            tab_rect = pygame.Rect(self.panel_x + 20 + i * 110, tab_y, 100, 30)
+            
+            # Highlight selected
+            if i == self.party_index:
+                pygame.draw.rect(self.screen, (80, 70, 100), tab_rect)
+                pygame.draw.rect(self.screen, COLOR_UI_ACCENT, tab_rect, 2)
+            else:
+                pygame.draw.rect(self.screen, (50, 45, 60), tab_rect)
+                pygame.draw.rect(self.screen, (80, 75, 95), tab_rect, 1)
+            
+            # Name
+            name = self.font.render(member.name[:12], True, COLOR_TEXT)
+            self.screen.blit(name, (tab_rect.x + 8, tab_rect.y + 6))
     
     def _render_tabs(self, character):
         """Render skill category tabs."""

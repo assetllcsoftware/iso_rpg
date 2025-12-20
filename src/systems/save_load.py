@@ -18,6 +18,7 @@ def serialize_character(char):
     """Convert character to saveable dict."""
     data = {
         'name': char.name,
+        'char_class': getattr(char, 'char_class', 'warrior'),
         'x': char.x,
         'y': char.y,
         'level': char.level,
@@ -40,6 +41,11 @@ def serialize_character(char):
             for slot, item in char.equipment.items()
         },
         'spells_known': list(char.spellbook.spells.keys()) if hasattr(char, 'spellbook') else [],
+        # Downed state
+        'is_downed': getattr(char, 'is_downed', False),
+        'down_timer': getattr(char, 'down_timer', 0.0),
+        # Formation
+        'formation_offset': getattr(char, 'formation_offset', (1.5, 1.5)),
     }
     return data
 
@@ -128,6 +134,9 @@ def deserialize_character(data, is_main=False):
     
     char = Character(data['name'], data['x'], data['y'])
     
+    # Class (v2+)
+    char.char_class = data.get('char_class', 'warrior')
+    
     char.level = data['level']
     char.experience = data['experience']
     char.health = data['health']
@@ -156,15 +165,26 @@ def deserialize_character(data, is_main=False):
     for spell_id in data.get('spells_known', []):
         char.spellbook.learn_spell(spell_id)
     
+    # Downed state (v2+)
+    char.is_downed = data.get('is_downed', False)
+    char.down_timer = data.get('down_timer', 0.0)
+    
+    # Formation (v2+)
+    offset = data.get('formation_offset', (1.5, 1.5))
+    char.formation_offset = tuple(offset) if isinstance(offset, list) else offset
+    
     return char
 
+
+SAVE_VERSION = 2  # Increment on breaking changes
 
 def save_game(game, slot=1):
     """Save the current game state."""
     ensure_save_dir()
     
     save_data = {
-        'version': 1,
+        'version': SAVE_VERSION,
+        'game_version': '0.1.0',  # Game version string
         'timestamp': datetime.now().isoformat(),
         'dungeon_level': game.world.level,
         'dungeon_seed': getattr(game.world, 'dungeon_seed', None),
@@ -234,8 +254,11 @@ def get_save_info(slot=1):
         data = json.load(f)
     
     return {
+        'version': data.get('version', 1),
+        'game_version': data.get('game_version', 'unknown'),
         'timestamp': data['timestamp'],
         'dungeon_level': data['dungeon_level'],
+        'dungeon_seed': data.get('dungeon_seed'),
         'party_size': len(data['party']),
         'main_char': data['party'][0]['name'] if data['party'] else 'Unknown',
         'main_level': data['party'][0]['level'] if data['party'] else 1,

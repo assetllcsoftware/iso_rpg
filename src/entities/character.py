@@ -67,6 +67,11 @@ class Character(Entity):
         
         # Level up tracking for notifications
         self.pending_level_ups = []  # List of skill names that leveled up
+        
+        # Downed state (revivable instead of dead)
+        self.is_downed = False
+        self.down_timer = 0.0
+        self.max_down_time = 60.0  # Seconds before permanent death
     
     @property
     def current_weight(self):
@@ -191,16 +196,39 @@ class Character(Entity):
     
     def take_damage(self, amount, damage_type='physical'):
         """Take damage, reduced by armor."""
+        if self.is_downed:
+            return 0  # Can't damage downed characters
+            
         if damage_type == 'physical':
             reduction = self.armor / (self.armor + 50)
             amount = int(amount * (1 - reduction))
         
         self.health = max(0, self.health - amount)
+        
+        # Go into downed state instead of dying (except player)
+        if self.health <= 0 and not self.is_player_controlled:
+            self.is_downed = True
+            self.down_timer = 0.0
+            self.health = 0
+        
         return amount
     
     def heal(self, amount):
         """Heal health."""
+        if self.is_downed:
+            return  # Can't heal downed characters normally
         self.health = min(self.max_health, self.health + amount)
+    
+    def revive(self, heal_percent=50):
+        """Revive from downed state."""
+        if self.is_downed:
+            self.is_downed = False
+            self.down_timer = 0.0
+            self.health = int(self.max_health * heal_percent / 100)
+            self.pending_level_ups.append({
+                'skill': 'REVIVED',
+                'new_level': 0
+            })
     
     def restore_mana(self, amount):
         """Restore mana."""
@@ -270,6 +298,14 @@ class Character(Entity):
     
     def update(self, dt):
         """Update character state."""
+        # Handle downed state
+        if self.is_downed:
+            self.down_timer += dt
+            if self.down_timer >= self.max_down_time:
+                # Permanent death - remove from party
+                self.health = -1  # Mark for removal
+            return  # Don't do anything else while downed
+        
         super().update(dt)
         
         # Update cooldowns
@@ -309,20 +345,43 @@ class Character(Entity):
             
             if char_class == 'mage':
                 # Mage: cast spells, keep distance
-                if self.health < self.max_health * 0.5 and self.mana >= 20:
-                    # Self heal
+                # Priority 1: Self heal when low
+                if self.health < self.max_health * 0.5 and self.mana >= 20 and self.can_attack():
                     self.mana -= 20
+                    self.attack_cooldown = 1.5
                     heal_amount = 20 + self.intelligence
                     self.health = min(self.max_health, self.health + heal_amount)
                     self.gain_skill_xp(SKILL_NATURE_MAGIC, 15)
-                elif dist <= 6.0 and self.mana >= 15:
-                    # Fireball attack
+                    # Emit heal visual
+                    if self._world_ref:
+                        self._world_ref.combat_events.append({
+                            'type': 'spell',
+                            'attacker': self,
+                            'target': self,
+                            'damage': 0,
+                            'spell_color': (100, 255, 100)
+                        })
+                # Priority 2: Attack if in range and can cast
+                elif dist <= 6.0 and self.mana >= 15 and self.can_attack():
                     self.mana -= 15
+                    self.attack_cooldown = 1.2  # Spell cooldown
                     damage = 15 + self.intelligence // 2
                     self.target.take_damage(damage, self)
                     self.gain_skill_xp(SKILL_COMBAT_MAGIC, 15)
-                # Keep distance
-                if dist < 3.0 and self.follow_target:
+                    # Emit spell attack visual
+                    if self._world_ref:
+                        self._world_ref.combat_events.append({
+                            'type': 'spell',
+                            'attacker': self,
+                            'target': self.target,
+                            'damage': damage,
+                            'spell_color': (255, 100, 50)  # Fireball orange
+                        })
+                # Move closer if too far to cast
+                elif dist > 6.0:
+                    self.set_path([(self.target.x, self.target.y)])
+                # Keep distance from enemies if too close
+                elif dist < 3.0 and self.follow_target:
                     self.set_path([(self.follow_target.x, self.follow_target.y)])
                     
             elif char_class == 'ranger':
@@ -387,7 +446,7 @@ class Character(Entity):
         if not hasattr(self, '_world_ref') or not self._world_ref:
             return None
         
-        aggro_range = 5.0
+        aggro_range = 8.0  # Increased so allies engage from further
         nearest = None
         nearest_dist = aggro_range
         

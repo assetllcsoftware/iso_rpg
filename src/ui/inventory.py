@@ -20,6 +20,11 @@ class InventoryUI:
         self.drag_source = None  # 'inventory' or slot name
         self.hover_item = None
         
+        # Party switching
+        self.party = None
+        self.party_index = 0
+        self.viewing_character = None
+        
         # Fonts
         pygame.font.init()
         self.font = pygame.font.Font(None, 24)
@@ -95,23 +100,60 @@ class InventoryUI:
         if not self.visible:
             return False
         
-        if event.type == pygame.MOUSEBUTTONDOWN:
+        # Use viewing_character if set, otherwise the passed character
+        char = self.viewing_character or character
+        
+        if event.type == pygame.KEYDOWN:
+            if event.key == pygame.K_TAB and self.party:
+                # Cycle through party members
+                self.party_index = (self.party_index + 1) % len(self.party)
+                self.viewing_character = self.party[self.party_index]
+                return True
+            elif event.key == pygame.K_ESCAPE:
+                self.visible = False
+                return True
+        
+        elif event.type == pygame.MOUSEBUTTONDOWN:
             if event.button == 1:
-                return self._handle_click(event.pos, character)
+                # Check party tab clicks first
+                if self.party and self._handle_party_tab_click(event.pos):
+                    return True
+                return self._handle_click(event.pos, char)
             elif event.button == 3 and action_bar:
                 # Right-click to assign to action bar
-                return self._handle_right_click(event.pos, character, action_bar)
+                return self._handle_right_click(event.pos, char, action_bar)
         
         elif event.type == pygame.MOUSEBUTTONUP:
             if event.button == 1 and self.dragging_item:
-                return self._handle_drop(event.pos, character)
+                return self._handle_drop(event.pos, char)
         
         elif event.type == pygame.MOUSEMOTION:
-            self._update_hover(event.pos, character)
+            self._update_hover(event.pos, char)
             if self.dragging_item:
                 return True
         
         return False
+    
+    def _handle_party_tab_click(self, pos):
+        """Check if clicking on party member tabs."""
+        if not self.party:
+            return False
+        
+        tab_y = 20
+        for i, member in enumerate(self.party):
+            tab_rect = pygame.Rect(60 + i * 110, tab_y, 100, 30)
+            if tab_rect.collidepoint(pos):
+                self.party_index = i
+                self.viewing_character = member
+                return True
+        return False
+    
+    def set_party(self, party, current_index=0):
+        """Set the party reference for switching between members."""
+        self.party = party
+        self.party_index = current_index
+        if party and len(party) > current_index:
+            self.viewing_character = party[current_index]
     
     def _handle_right_click(self, pos, character, action_bar):
         """Handle right-click to assign item to action bar."""
@@ -240,16 +282,23 @@ class InventoryUI:
         if not self.visible:
             return
         
+        # Use viewing_character if set
+        char = self.viewing_character or character
+        
         # Darken background
         overlay = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT), pygame.SRCALPHA)
         overlay.fill((0, 0, 0, 180))
         self.screen.blit(overlay, (0, 0))
         
+        # Party tabs at top
+        if self.party and len(self.party) > 1:
+            self._render_party_tabs()
+        
         # Left panel - Character sheet
-        self._render_character_panel(character)
+        self._render_character_panel(char)
         
         # Right panel - Inventory
-        self._render_inventory_panel(character)
+        self._render_inventory_panel(char)
         
         # Tooltip
         if self.hover_item and not self.dragging_item:
@@ -258,6 +307,29 @@ class InventoryUI:
         # Dragging item
         if self.dragging_item:
             self._render_dragged_item(self.dragging_item, pygame.mouse.get_pos())
+    
+    def _render_party_tabs(self):
+        """Render party member tabs at the top."""
+        tab_y = 20
+        
+        for i, member in enumerate(self.party):
+            tab_rect = pygame.Rect(60 + i * 110, tab_y, 100, 30)
+            
+            # Highlight selected
+            if i == self.party_index:
+                pygame.draw.rect(self.screen, (80, 70, 100), tab_rect)
+                pygame.draw.rect(self.screen, COLOR_UI_ACCENT, tab_rect, 2)
+            else:
+                pygame.draw.rect(self.screen, (50, 45, 60), tab_rect)
+                pygame.draw.rect(self.screen, (80, 75, 95), tab_rect, 1)
+            
+            # Name
+            name = self.font.render(member.name[:12], True, COLOR_TEXT)
+            self.screen.blit(name, (tab_rect.x + 8, tab_rect.y + 6))
+        
+        # TAB hint
+        hint = self.font_small.render("TAB to switch", True, COLOR_TEXT_DIM)
+        self.screen.blit(hint, (60 + len(self.party) * 110 + 15, tab_y + 8))
     
     def _render_character_panel(self, char):
         """Render character stats and equipment."""

@@ -194,6 +194,9 @@ class IsometricRenderer:
         # Get entity sprite or create placeholder
         size = int(24 * camera.zoom)
         
+        # Check if entity is downed
+        is_downed = getattr(entity, 'is_downed', False)
+        
         # Draw shadow
         shadow_rect = pygame.Rect(
             screen_x - size // 2,
@@ -208,18 +211,40 @@ class IsometricRenderer:
         # Draw entity body
         entity_color = entity.color if hasattr(entity, 'color') else (200, 150, 100)
         
-        # Simple character representation
-        body_rect = pygame.Rect(
-            screen_x - size // 3,
-            screen_y - size,
-            size * 2 // 3,
-            size
-        )
-        pygame.draw.ellipse(self.screen, entity_color, body_rect)
-        pygame.draw.ellipse(self.screen, (30, 25, 40), body_rect, 2)
+        if is_downed:
+            # Downed: draw lying down (horizontal ellipse)
+            body_rect = pygame.Rect(
+                screen_x - size // 2,
+                screen_y - size // 4,
+                size,
+                size // 3
+            )
+            # Fade the color to show they're downed
+            faded_color = tuple(c // 2 for c in entity_color)
+            pygame.draw.ellipse(self.screen, faded_color, body_rect)
+            pygame.draw.ellipse(self.screen, (30, 25, 40), body_rect, 2)
+            
+            # Pulsing "revive me" indicator
+            time = pygame.time.get_ticks() / 1000
+            pulse = abs(math.sin(time * 2)) * 0.5 + 0.5
+            indicator_color = (255, int(255 * pulse), 0)
+            pygame.draw.circle(self.screen, indicator_color, 
+                             (screen_x, screen_y - size // 2), 6)
+            pygame.draw.circle(self.screen, (30, 25, 40), 
+                             (screen_x, screen_y - size // 2), 6, 1)
+        else:
+            # Normal: draw standing (vertical ellipse)
+            body_rect = pygame.Rect(
+                screen_x - size // 3,
+                screen_y - size,
+                size * 2 // 3,
+                size
+            )
+            pygame.draw.ellipse(self.screen, entity_color, body_rect)
+            pygame.draw.ellipse(self.screen, (30, 25, 40), body_rect, 2)
         
-        # Health bar above entity
-        if hasattr(entity, 'health') and hasattr(entity, 'max_health'):
+        # Health bar above entity (only if not downed)
+        if hasattr(entity, 'health') and hasattr(entity, 'max_health') and not is_downed:
             bar_width = size
             bar_height = 4
             bar_x = screen_x - bar_width // 2
