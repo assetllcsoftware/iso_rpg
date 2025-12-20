@@ -9,39 +9,36 @@ from ..engine.constants import (
 )
 
 
-# Skill unlock data
+# Skill unlock data - matches actual spell level_req in magic.py
 SKILL_UNLOCKS = {
     SKILL_MELEE: [
-        (1, "Basic Attacks", "Use melee weapons"),
-        (5, "Power Strike", "150% damage, 3s cooldown"),
-        (10, "Whirlwind", "AoE attack around self"),
-        (15, "Berserker Rage", "+50% attack speed 10s"),
-        (20, "Execute", "Instant kill <15% HP"),
-        (25, "Blade Master", "+20% crit chance"),
+        (0, "Basic Attacks", "Use melee weapons"),
+        (3, "Power Strike", "150% damage"),
+        (6, "Whirlwind", "AoE attack"),
+        (10, "Berserker Rage", "+50% speed"),
+        (15, "Execute", "Instant kill <15% HP"),
     ],
     SKILL_RANGED: [
-        (1, "Basic Shots", "Use ranged weapons"),
-        (5, "Quick Shot", "Fire 2 arrows rapidly"),
-        (10, "Piercing Arrow", "Hits all in line"),
-        (15, "Multishot", "Fire 3 arrows spread"),
-        (20, "Rain of Arrows", "AoE damage"),
-        (25, "Sharpshooter", "+30% crit damage"),
+        (0, "Basic Shots", "Use ranged weapons"),
+        (3, "Quick Shot", "Fire 2 arrows"),
+        (6, "Piercing Arrow", "Hits all in line"),
+        (10, "Multishot", "Fire 3 arrows"),
+        (15, "Rain of Arrows", "AoE damage"),
     ],
     SKILL_COMBAT_MAGIC: [
-        (1, "Fireball", "Explosive fire damage"),
-        (3, "Lightning Bolt", "Instant electric hit"),
-        (5, "Ice Shard", "Fast ice projectile"),
-        (8, "Chain Lightning", "Jumps to 3 enemies"),
-        (12, "Meteor", "Massive AoE damage"),
-        (20, "Armageddon", "Ultimate destruction"),
+        (0, "Fireball", "Explosive fire damage"),
+        (0, "Ice Shard", "Fast ice projectile"),
+        (2, "Lightning Bolt", "Instant electric hit"),
+        (3, "Chain Lightning", "Jumps to 3 enemies"),
+        (15, "Meteor", "Massive AoE damage"),
     ],
     SKILL_NATURE_MAGIC: [
-        (1, "Heal", "Single target heal"),
-        (3, "Regeneration", "Heal over time"),
+        (0, "Heal", "Single target heal"),
+        (2, "Poison Cloud", "Damage over time"),
+        (3, "Revive", "Revive downed ally"),
+        (4, "Regeneration", "Heal over time"),
         (5, "Group Heal", "Heal all party"),
         (8, "Summon Wolf", "Wolf companion"),
-        (12, "Poison Cloud", "Damage over time AoE"),
-        (20, "Resurrection", "Revive fallen ally"),
     ],
 }
 

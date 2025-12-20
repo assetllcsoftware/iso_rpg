@@ -11,7 +11,7 @@ class Enemy(Entity):
     
     ENEMY_TYPES = {
         'goblin': {
-            'health': 30,
+            'health': 50,
             'damage': 5,
             'speed': 2.5,
             'xp': 20,
@@ -19,7 +19,7 @@ class Enemy(Entity):
             'aggro_range': 5.0,
         },
         'skeleton': {
-            'health': 40,
+            'health': 70,
             'damage': 8,
             'speed': 2.0,
             'xp': 30,
@@ -27,7 +27,7 @@ class Enemy(Entity):
             'aggro_range': 6.0,
         },
         'orc': {
-            'health': 80,
+            'health': 130,
             'damage': 12,
             'speed': 2.2,
             'xp': 50,
@@ -35,7 +35,7 @@ class Enemy(Entity):
             'aggro_range': 5.0,
         },
         'spider': {
-            'health': 25,
+            'health': 40,
             'damage': 6,
             'speed': 3.5,
             'xp': 25,
@@ -43,7 +43,7 @@ class Enemy(Entity):
             'aggro_range': 4.0,
         },
         'troll': {
-            'health': 150,
+            'health': 240,
             'damage': 20,
             'speed': 1.5,
             'xp': 100,

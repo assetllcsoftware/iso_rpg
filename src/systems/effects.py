@@ -178,7 +178,8 @@ class SpellBoltEffect(Effect):
         dx = target_x - start_x
         dy = target_y - start_y
         distance = math.sqrt(dx * dx + dy * dy)
-        duration = max(0.2, min(0.5, distance / 8))  # Slower travel
+        # Slower projectile travel - 4 units per second
+        duration = max(0.3, distance / 4.0)
         
         super().__init__(start_x, start_y, duration=duration)
         self.start_x = start_x
@@ -195,6 +196,11 @@ class SpellBoltEffect(Effect):
         self.impact_color = color
         self.effects_manager = None
         self.impact_spawned = False
+        
+        # For delayed damage
+        self.damage = 0
+        self.damage_target = None
+        self.caster = None
     
     def update(self, dt):
         super().update(dt)
@@ -203,10 +209,17 @@ class SpellBoltEffect(Effect):
         self.x = self.start_x + (self.target_x - self.start_x) * progress
         self.y = self.start_y + (self.target_y - self.start_y) * progress
         
-        # Spawn impact when bolt reaches target
-        if not self.active and self.spawn_impact_on_finish and not self.impact_spawned:
-            if self.effects_manager:
+        # Apply damage and spawn impact when bolt reaches target
+        if not self.active and not self.impact_spawned:
+            # Apply delayed damage
+            if self.damage > 0 and self.damage_target and hasattr(self.damage_target, 'take_damage'):
+                if self.damage_target.health > 0:
+                    self.damage_target.take_damage(self.damage, self.caster)
+            
+            # Spawn impact visual
+            if self.spawn_impact_on_finish and self.effects_manager:
                 self.effects_manager.spawn_impact(self.target_x, self.target_y, self.impact_color, 0.8)
+            
             self.impact_spawned = True
         
         # Spawn particles
@@ -244,17 +257,17 @@ class SpellBoltEffect(Effect):
         # Draw main bolt
         screen_x, screen_y = camera.world_to_screen(self.x, self.y)
         
-        # Glow
-        glow_size = max(1, int(20 * camera.zoom))
-        glow_surf = pygame.Surface((glow_size * 2 + 2, glow_size * 2 + 2), pygame.SRCALPHA)
-        pygame.draw.circle(glow_surf, (*self.color, 60), (glow_size + 1, glow_size + 1), glow_size)
-        pygame.draw.circle(glow_surf, (*self.color, 120), (glow_size + 1, glow_size + 1), max(1, glow_size // 2))
-        screen.blit(glow_surf, (screen_x - glow_size - 1, screen_y - glow_size - 1))
+        # Outer glow - bigger
+        glow_size = max(5, int(35 * camera.zoom))
+        glow_surf = pygame.Surface((glow_size * 2 + 4, glow_size * 2 + 4), pygame.SRCALPHA)
+        pygame.draw.circle(glow_surf, (*self.color, 40), (glow_size + 2, glow_size + 2), glow_size)
+        pygame.draw.circle(glow_surf, (*self.color, 80), (glow_size + 2, glow_size + 2), max(3, glow_size // 2))
+        screen.blit(glow_surf, (screen_x - glow_size - 2, screen_y - glow_size - 2))
         
-        # Core
-        core_size = max(1, int(6 * camera.zoom))
+        # Bright core - bigger
+        core_size = max(4, int(12 * camera.zoom))
         pygame.draw.circle(screen, (255, 255, 255), (screen_x, screen_y), core_size)
-        pygame.draw.circle(screen, self.color, (screen_x, screen_y), core_size + 2, 2)
+        pygame.draw.circle(screen, self.color, (screen_x, screen_y), core_size + 3, 3)
 
 
 class ImpactEffect(Effect):
@@ -318,45 +331,87 @@ class FireballEffect(SpellBoltEffect):
     
     def __init__(self, start_x, start_y, target_x, target_y):
         super().__init__(start_x, start_y, target_x, target_y, color=(255, 120, 40))
+        # Fireball is slower and more dramatic
+        dx = target_x - start_x
+        dy = target_y - start_y
+        distance = math.sqrt(dx * dx + dy * dy)
+        self.duration = max(0.5, distance / 3.0)  # Even slower than normal bolts
     
     def update(self, dt):
         super().update(dt)
         
-        # Extra fire particles
-        if random.random() < 0.9:
-            self.particles.append({
-                'x': self.x + random.uniform(-0.2, 0.2),
-                'y': self.y + random.uniform(-0.2, 0.2),
-                'vx': random.uniform(-2, 2),
-                'vy': random.uniform(-4, -1),
-                'life': random.uniform(0.2, 0.4),
-                'size': random.uniform(3, 7),
-            })
+        # Lots of fire particles trailing behind
+        for _ in range(3):  # Multiple particles per frame
+            if random.random() < 0.95:
+                self.particles.append({
+                    'x': self.x + random.uniform(-0.3, 0.3),
+                    'y': self.y + random.uniform(-0.3, 0.3),
+                    'vx': random.uniform(-3, 3),
+                    'vy': random.uniform(-5, -2),
+                    'life': random.uniform(0.3, 0.6),
+                    'size': random.uniform(5, 12),
+                })
+    
+    def render(self, screen, camera):
+        # Draw fire particles first
+        for p in self.particles:
+            alpha = min(255, max(0, int(220 * (p['life'] / 0.6))))
+            screen_pos = camera.world_to_screen(p['x'], p['y'])
+            size = max(2, int(p['size'] * camera.zoom))
+            
+            # Orange to yellow gradient based on life
+            r = 255
+            g = int(100 + 120 * (p['life'] / 0.6))
+            b = int(50 * (p['life'] / 0.6))
+            
+            part_surf = pygame.Surface((size * 2 + 2, size * 2 + 2), pygame.SRCALPHA)
+            pygame.draw.circle(part_surf, (r, g, b, alpha), (size + 1, size + 1), size)
+            screen.blit(part_surf, (screen_pos[0] - size - 1, screen_pos[1] - size - 1))
+        
+        # Draw main fireball - big and bright
+        screen_x, screen_y = camera.world_to_screen(self.x, self.y)
+        
+        # Outer glow
+        glow_size = max(8, int(45 * camera.zoom))
+        glow_surf = pygame.Surface((glow_size * 2 + 4, glow_size * 2 + 4), pygame.SRCALPHA)
+        pygame.draw.circle(glow_surf, (255, 100, 30, 50), (glow_size + 2, glow_size + 2), glow_size)
+        pygame.draw.circle(glow_surf, (255, 150, 50, 100), (glow_size + 2, glow_size + 2), glow_size // 2)
+        screen.blit(glow_surf, (screen_x - glow_size - 2, screen_y - glow_size - 2))
+        
+        # Bright yellow-white core
+        core_size = max(6, int(18 * camera.zoom))
+        pygame.draw.circle(screen, (255, 255, 200), (screen_x, screen_y), core_size)
+        pygame.draw.circle(screen, (255, 200, 100), (screen_x, screen_y), core_size + 4, 4)
 
 
 class HealEffect(Effect):
-    """Healing sparkles rising up."""
+    """Healing sparkles rising up with glowing cross."""
     
     def __init__(self, x, y):
-        super().__init__(x, y, duration=0.8)
+        super().__init__(x, y, duration=1.0)
         self.particles = []
         self.spawn_timer = 0
+        self.ring_radius = 0
     
     def update(self, dt):
         super().update(dt)
         
+        # Expanding ring
+        self.ring_radius = self.progress * 2.0
+        
         # Spawn healing particles
         self.spawn_timer += dt
-        if self.spawn_timer > 0.05 and self.progress < 0.7:
+        if self.spawn_timer > 0.03 and self.progress < 0.8:
             self.spawn_timer = 0
             angle = random.uniform(0, math.pi * 2)
-            dist = random.uniform(0.2, 0.8)
+            dist = random.uniform(0.2, 1.0)
             self.particles.append({
                 'x': self.x + math.cos(angle) * dist,
                 'y': self.y + math.sin(angle) * dist,
-                'vy': -random.uniform(2, 4),
-                'life': random.uniform(0.4, 0.7),
-                'size': random.uniform(3, 6),
+                'vy': -random.uniform(2, 5),
+                'life': random.uniform(0.5, 0.9),
+                'size': random.uniform(3, 8),
+                'is_cross': random.random() < 0.3,
             })
         
         # Update particles
@@ -367,24 +422,336 @@ class HealEffect(Effect):
         self.particles = [p for p in self.particles if p['life'] > 0]
     
     def render(self, screen, camera):
+        screen_x, screen_y = camera.world_to_screen(self.x, self.y)
+        
+        # Draw expanding ring
+        ring_size = max(1, int(self.ring_radius * 30 * camera.zoom))
+        ring_alpha = max(0, int(150 * (1 - self.progress)))
+        if ring_size > 0 and ring_alpha > 0:
+            ring_surf = pygame.Surface((ring_size * 2 + 4, ring_size * 2 + 4), pygame.SRCALPHA)
+            pygame.draw.circle(ring_surf, (100, 255, 150, ring_alpha), 
+                             (ring_size + 2, ring_size + 2), ring_size, 3)
+            screen.blit(ring_surf, (screen_x - ring_size - 2, screen_y - ring_size - 2))
+        
+        # Draw center glow
+        if self.progress < 0.5:
+            glow_alpha = int(180 * (1 - self.progress * 2))
+            glow_size = max(1, int(15 * camera.zoom))
+            glow_surf = pygame.Surface((glow_size * 2 + 4, glow_size * 2 + 4), pygame.SRCALPHA)
+            pygame.draw.circle(glow_surf, (150, 255, 180, glow_alpha), 
+                             (glow_size + 2, glow_size + 2), glow_size)
+            screen.blit(glow_surf, (screen_x - glow_size - 2, screen_y - glow_size - 2))
+        
         for p in self.particles:
-            alpha = min(255, max(0, int(255 * (p['life'] / 0.7))))
+            alpha = min(255, max(0, int(255 * (p['life'] / 0.9))))
             screen_pos = camera.world_to_screen(p['x'], p['y'])
             size = max(1, int(p['size'] * camera.zoom))
             
-            # Green healing color
             color = (100, 255, 150)
             
-            part_surf = pygame.Surface((size * 2 + 2, size * 2 + 2), pygame.SRCALPHA)
-            pygame.draw.circle(part_surf, (*color, alpha), (size + 1, size + 1), size)
-            screen.blit(part_surf, (screen_pos[0] - size - 1, screen_pos[1] - size - 1))
+            part_surf = pygame.Surface((size * 2 + 4, size * 2 + 4), pygame.SRCALPHA)
             
-            # Plus sign on some particles
-            if size > 4:
-                pygame.draw.line(part_surf, (255, 255, 255, alpha), 
-                               (size + 1, size + 1 - size//2), (size + 1, size + 1 + size//2), 2)
-                pygame.draw.line(part_surf, (255, 255, 255, alpha),
-                               (size + 1 - size//2, size + 1), (size + 1 + size//2, size + 1), 2)
+            if p.get('is_cross') and size > 3:
+                # Draw plus sign
+                cx, cy = size + 2, size + 2
+                pygame.draw.line(part_surf, (*color, alpha), (cx, cy - size//2), (cx, cy + size//2), 2)
+                pygame.draw.line(part_surf, (*color, alpha), (cx - size//2, cy), (cx + size//2, cy), 2)
+            else:
+                pygame.draw.circle(part_surf, (*color, alpha), (size + 2, size + 2), size)
+            
+            screen.blit(part_surf, (screen_pos[0] - size - 2, screen_pos[1] - size - 2))
+
+
+class LightningBoltEffect(Effect):
+    """Jagged lightning bolt that strikes instantly."""
+    
+    def __init__(self, start_x, start_y, target_x, target_y):
+        super().__init__(start_x, start_y, duration=0.4)
+        self.start_x = start_x
+        self.start_y = start_y
+        self.target_x = target_x
+        self.target_y = target_y
+        self.bolts = []
+        self._generate_bolt()
+    
+    def _generate_bolt(self):
+        """Generate a jagged lightning path."""
+        dx = self.target_x - self.start_x
+        dy = self.target_y - self.start_y
+        dist = max(0.1, math.sqrt(dx * dx + dy * dy))
+        
+        segments = max(4, int(dist * 2))
+        points = [(self.start_x, self.start_y)]
+        
+        for i in range(1, segments):
+            t = i / segments
+            x = self.start_x + dx * t
+            y = self.start_y + dy * t
+            perp_x = -dy / dist
+            perp_y = dx / dist
+            offset = random.uniform(-0.4, 0.4) * (1 - abs(t - 0.5) * 2)
+            x += perp_x * offset
+            y += perp_y * offset
+            points.append((x, y))
+        
+        points.append((self.target_x, self.target_y))
+        self.bolts.append(points)
+        
+        # Branching bolts
+        for i, (px, py) in enumerate(points[1:-2]):
+            if random.random() < 0.3:
+                branch_len = random.uniform(0.5, 1.5)
+                branch_angle = math.atan2(dy, dx) + random.uniform(-1.2, 1.2)
+                branch_end = (px + math.cos(branch_angle) * branch_len,
+                              py + math.sin(branch_angle) * branch_len)
+                self.bolts.append([(px, py), branch_end])
+    
+    def render(self, screen, camera):
+        fade = 1.0 - self.progress
+        
+        # Screen flash
+        if self.progress < 0.1:
+            flash_alpha = int(80 * (1 - self.progress * 10))
+            flash_surf = pygame.Surface((screen.get_width(), screen.get_height()), pygame.SRCALPHA)
+            flash_surf.fill((200, 200, 255, flash_alpha))
+            screen.blit(flash_surf, (0, 0))
+        
+        for bolt_points in self.bolts:
+            if len(bolt_points) < 2:
+                continue
+            screen_points = [camera.world_to_screen(x, y) for x, y in bolt_points]
+            
+            # Glow
+            alpha = min(255, max(0, int(100 * fade)))
+            if alpha > 0:
+                for i in range(len(screen_points) - 1):
+                    glow_surf = pygame.Surface((screen.get_width(), screen.get_height()), pygame.SRCALPHA)
+                    pygame.draw.line(glow_surf, (150, 150, 255, alpha), 
+                                   screen_points[i], screen_points[i+1], 8)
+                    screen.blit(glow_surf, (0, 0))
+            
+            # Core
+            for i in range(len(screen_points) - 1):
+                pygame.draw.line(screen, (255, 255, 255), screen_points[i], screen_points[i+1], 3)
+                pygame.draw.line(screen, (200, 200, 255), screen_points[i], screen_points[i+1], 2)
+
+
+class ChainLightningEffect(Effect):
+    """Lightning that jumps between multiple targets."""
+    
+    def __init__(self, positions):
+        if len(positions) < 2:
+            positions = [(0, 0), (1, 1)]
+        super().__init__(positions[0][0], positions[0][1], duration=0.6)
+        self.positions = positions
+        self.bolts = []
+        
+        for i in range(len(positions) - 1):
+            self._generate_bolt(positions[i], positions[i + 1], delay=i * 0.1)
+    
+    def _generate_bolt(self, start, end, delay):
+        dx = end[0] - start[0]
+        dy = end[1] - start[1]
+        dist = max(0.1, math.sqrt(dx * dx + dy * dy))
+        
+        segments = max(3, int(dist * 2))
+        points = [start]
+        
+        for i in range(1, segments):
+            t = i / segments
+            x = start[0] + dx * t
+            y = start[1] + dy * t
+            perp_x = -dy / dist
+            perp_y = dx / dist
+            offset = random.uniform(-0.3, 0.3) * (1 - abs(t - 0.5) * 2)
+            x += perp_x * offset
+            y += perp_y * offset
+            points.append((x, y))
+        
+        points.append(end)
+        self.bolts.append({'points': points, 'delay': delay})
+    
+    def render(self, screen, camera):
+        for bolt in self.bolts:
+            if self.elapsed < bolt['delay']:
+                continue
+            
+            bolt_progress = (self.elapsed - bolt['delay']) / max(0.1, self.duration - bolt['delay'])
+            fade = max(0, 1.0 - bolt_progress)
+            if fade <= 0:
+                continue
+            
+            points = bolt['points']
+            screen_points = [camera.world_to_screen(x, y) for x, y in points]
+            if len(screen_points) < 2:
+                continue
+            
+            alpha = min(255, max(0, int(80 * fade)))
+            for i in range(len(screen_points) - 1):
+                glow_surf = pygame.Surface((screen.get_width(), screen.get_height()), pygame.SRCALPHA)
+                pygame.draw.line(glow_surf, (180, 180, 255, alpha), 
+                               screen_points[i], screen_points[i+1], 6)
+                screen.blit(glow_surf, (0, 0))
+            
+            for i in range(len(screen_points) - 1):
+                pygame.draw.line(screen, (255, 255, 255), screen_points[i], screen_points[i+1], 2)
+            
+            # Sparks at nodes
+            for px, py in screen_points:
+                if random.random() < 0.5 * fade:
+                    pygame.draw.circle(screen, (255, 255, 255), (int(px), int(py)), random.randint(2, 4))
+
+
+class IceShardEffect(Effect):
+    """Crystalline ice projectile with frost trail."""
+    
+    def __init__(self, start_x, start_y, target_x, target_y):
+        dx = target_x - start_x
+        dy = target_y - start_y
+        distance = math.sqrt(dx * dx + dy * dy)
+        # Slower travel - 5 units per second
+        duration = max(0.3, distance / 5.0)
+        
+        super().__init__(start_x, start_y, duration=duration)
+        self.start_x = start_x
+        self.start_y = start_y
+        self.target_x = target_x
+        self.target_y = target_y
+        self.angle = math.atan2(dy, dx)
+        self.frost_particles = []
+        
+        # For impact spawning
+        self.spawn_impact_on_finish = False
+        self.impact_color = (150, 200, 255)
+        self.effects_manager = None
+        self.impact_spawned = False
+        
+        # For delayed damage
+        self.damage = 0
+        self.damage_target = None
+        self.caster = None
+    
+    def update(self, dt):
+        super().update(dt)
+        progress = self.progress
+        self.x = self.start_x + (self.target_x - self.start_x) * progress
+        self.y = self.start_y + (self.target_y - self.start_y) * progress
+        
+        # Apply damage and spawn impact when shard reaches target
+        if not self.active and not self.impact_spawned:
+            # Apply delayed damage
+            if self.damage > 0 and self.damage_target and hasattr(self.damage_target, 'take_damage'):
+                if self.damage_target.health > 0:
+                    self.damage_target.take_damage(self.damage, self.caster)
+            
+            # Spawn impact visual
+            if self.spawn_impact_on_finish and self.effects_manager:
+                self.effects_manager.spawn_impact(self.target_x, self.target_y, self.impact_color, 0.8)
+            
+            self.impact_spawned = True
+        
+        if random.random() < 0.7:
+            self.frost_particles.append({
+                'x': self.x, 'y': self.y,
+                'vx': random.uniform(-1, 1), 'vy': random.uniform(-1, 0.5),
+                'life': random.uniform(0.3, 0.5), 'size': random.uniform(2, 5),
+            })
+        
+        for p in self.frost_particles:
+            p['x'] += p['vx'] * dt
+            p['y'] += p['vy'] * dt
+            p['life'] -= dt
+        self.frost_particles = [p for p in self.frost_particles if p['life'] > 0]
+    
+    def render(self, screen, camera):
+        # Frost particles trail
+        for p in self.frost_particles:
+            alpha = min(255, max(0, int(200 * (p['life'] / 0.5))))
+            screen_pos = camera.world_to_screen(p['x'], p['y'])
+            size = max(3, int(p['size'] * camera.zoom * 1.5))
+            frost_surf = pygame.Surface((size * 2, size * 2), pygame.SRCALPHA)
+            pygame.draw.circle(frost_surf, (180, 220, 255, alpha), (size, size), size)
+            screen.blit(frost_surf, (screen_pos[0] - size, screen_pos[1] - size))
+        
+        screen_x, screen_y = camera.world_to_screen(self.x, self.y)
+        size = max(8, int(20 * camera.zoom))  # Bigger crystal
+        
+        # Glow behind crystal
+        glow_size = int(size * 1.5)
+        glow_surf = pygame.Surface((glow_size * 2 + 4, glow_size * 2 + 4), pygame.SRCALPHA)
+        pygame.draw.circle(glow_surf, (150, 200, 255, 60), (glow_size + 2, glow_size + 2), glow_size)
+        screen.blit(glow_surf, (screen_x - glow_size - 2, screen_y - glow_size - 2))
+        
+        # Crystal shape - larger and brighter
+        points = [
+            (screen_x + math.cos(self.angle) * size, screen_y + math.sin(self.angle) * size),
+            (screen_x + math.cos(self.angle + 2.2) * size * 0.6, screen_y + math.sin(self.angle + 2.2) * size * 0.6),
+            (screen_x + math.cos(self.angle + math.pi) * size * 0.4, screen_y + math.sin(self.angle + math.pi) * size * 0.4),
+            (screen_x + math.cos(self.angle - 2.2) * size * 0.6, screen_y + math.sin(self.angle - 2.2) * size * 0.6),
+        ]
+        pygame.draw.polygon(screen, (200, 235, 255), points)
+        pygame.draw.polygon(screen, (255, 255, 255), points, 2)
+
+
+class MeteorEffect(Effect):
+    """Falling meteor with fire trail and big impact."""
+    
+    def __init__(self, target_x, target_y):
+        super().__init__(target_x, target_y, duration=1.2)
+        self.target_x = target_x
+        self.target_y = target_y
+        self.start_offset_y = -8.0
+        self.meteor_x = target_x
+        self.meteor_y = target_y + self.start_offset_y
+        self.fire_particles = []
+        self.impacted = False
+        self.impact_time = 0.6
+    
+    def update(self, dt):
+        super().update(dt)
+        if self.elapsed < self.impact_time:
+            fall_progress = self.elapsed / self.impact_time
+            self.meteor_y = self.target_y + self.start_offset_y * (1 - fall_progress)
+            if random.random() < 0.9:
+                self.fire_particles.append({
+                    'x': self.meteor_x + random.uniform(-0.3, 0.3),
+                    'y': self.meteor_y,
+                    'vx': random.uniform(-1, 1), 'vy': random.uniform(-3, -1),
+                    'life': random.uniform(0.3, 0.6), 'size': random.uniform(4, 10),
+                })
+        elif not self.impacted:
+            self.impacted = True
+        
+        for p in self.fire_particles:
+            p['x'] += p['vx'] * dt
+            p['y'] += p['vy'] * dt
+            p['life'] -= dt
+        self.fire_particles = [p for p in self.fire_particles if p['life'] > 0]
+    
+    def render(self, screen, camera):
+        for p in self.fire_particles:
+            alpha = min(255, max(0, int(255 * (p['life'] / 0.6))))
+            screen_pos = camera.world_to_screen(p['x'], p['y'])
+            size = max(1, int(p['size'] * camera.zoom))
+            fire_surf = pygame.Surface((size * 2, size * 2), pygame.SRCALPHA)
+            pygame.draw.circle(fire_surf, (255, 150, 50, alpha), (size, size), size)
+            screen.blit(fire_surf, (screen_pos[0] - size, screen_pos[1] - size))
+        
+        if self.elapsed < self.impact_time:
+            screen_x, screen_y = camera.world_to_screen(self.meteor_x, self.meteor_y)
+            rock_size = int(18 * camera.zoom)
+            pygame.draw.circle(screen, (100, 60, 40), (screen_x, screen_y), rock_size)
+            glow_surf = pygame.Surface((rock_size * 4, rock_size * 4), pygame.SRCALPHA)
+            pygame.draw.circle(glow_surf, (255, 100, 30, 100), (rock_size * 2, rock_size * 2), rock_size * 2)
+            screen.blit(glow_surf, (screen_x - rock_size * 2, screen_y - rock_size * 2))
+        else:
+            impact_progress = (self.elapsed - self.impact_time) / (self.duration - self.impact_time)
+            screen_x, screen_y = camera.world_to_screen(self.target_x, self.target_y)
+            ring_size = max(1, int((30 + 80 * impact_progress) * camera.zoom))
+            ring_alpha = max(0, int(200 * (1 - impact_progress)))
+            ring_surf = pygame.Surface((ring_size * 2 + 10, ring_size * 2 + 10), pygame.SRCALPHA)
+            pygame.draw.circle(ring_surf, (255, 100, 30, ring_alpha), (ring_size + 5, ring_size + 5), ring_size, 5)
+            screen.blit(ring_surf, (screen_x - ring_size - 5, screen_y - ring_size - 5))
 
 
 class EffectsManager:
@@ -407,24 +774,63 @@ class EffectsManager:
         """Spawn an arrow projectile."""
         self.effects.append(ArrowEffect(start_x, start_y, target_x, target_y))
     
-    def spawn_spell(self, spell_name, start_x, start_y, target_x, target_y):
-        """Spawn a spell effect."""
+    def spawn_spell(self, spell_name, start_x, start_y, target_x, target_y, extra_targets=None, 
+                    damage=0, damage_target=None, caster=None):
+        """Spawn a spell effect with optional delayed damage."""
         if spell_name == 'fireball':
-            self.effects.append(FireballEffect(start_x, start_y, target_x, target_y))
-            # Delayed impact
-            self.effects.append(ImpactEffect(target_x, target_y, (255, 100, 50), size=1.2))
+            bolt = FireballEffect(start_x, start_y, target_x, target_y)
+            bolt.spawn_impact_on_finish = True
+            bolt.impact_color = (255, 100, 50)
+            bolt.effects_manager = self
+            bolt.damage = damage
+            bolt.damage_target = damage_target
+            bolt.caster = caster
+            self.effects.append(bolt)
         elif spell_name == 'ice_shard':
-            self.effects.append(SpellBoltEffect(start_x, start_y, target_x, target_y, 
-                                               color=(150, 200, 255)))
-            self.effects.append(ImpactEffect(target_x, target_y, (150, 200, 255), size=0.8))
+            bolt = IceShardEffect(start_x, start_y, target_x, target_y)
+            bolt.spawn_impact_on_finish = True
+            bolt.impact_color = (150, 200, 255)
+            bolt.effects_manager = self
+            bolt.damage = damage
+            bolt.damage_target = damage_target
+            bolt.caster = caster
+            self.effects.append(bolt)
         elif spell_name == 'lightning_bolt':
-            self.effects.append(SpellBoltEffect(start_x, start_y, target_x, target_y,
-                                               color=(200, 200, 255)))
-        elif spell_name == 'heal':
+            bolt = LightningBoltEffect(start_x, start_y, target_x, target_y)
+            bolt.spawn_impact_on_finish = True
+            bolt.impact_color = (200, 200, 255)
+            bolt.effects_manager = self
+            bolt.damage = damage
+            bolt.damage_target = damage_target
+            bolt.caster = caster
+            self.effects.append(bolt)
+        elif spell_name == 'chain_lightning':
+            # Chain lightning needs multiple target positions
+            positions = [(start_x, start_y), (target_x, target_y)]
+            if extra_targets:
+                positions.extend(extra_targets)
+            effect = ChainLightningEffect(positions)
+            effect.damage = damage
+            effect.damage_target = damage_target
+            effect.caster = caster
+            effect.extra_targets = extra_targets or []
+            self.effects.append(effect)
+        elif spell_name == 'meteor':
+            effect = MeteorEffect(target_x, target_y)
+            effect.damage = damage
+            effect.damage_target = damage_target
+            effect.caster = caster
+            self.effects.append(effect)
+        elif spell_name in ('heal', 'group_heal'):
             self.effects.append(HealEffect(target_x, target_y))
+        elif spell_name == 'revive':
+            self.effects.append(HealEffect(target_x, target_y))  # Same visual for now
         else:
             # Generic magic bolt
-            self.effects.append(SpellBoltEffect(start_x, start_y, target_x, target_y))
+            bolt = SpellBoltEffect(start_x, start_y, target_x, target_y)
+            bolt.spawn_impact_on_finish = True
+            bolt.effects_manager = self
+            self.effects.append(bolt)
     
     def spawn_impact(self, x, y, color=(255, 200, 100), size=1.0):
         """Spawn an impact effect."""

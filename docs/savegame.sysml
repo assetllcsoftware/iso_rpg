@@ -12,7 +12,7 @@
 
 package SaveGameModel {
     
-    import ScalarValues::*;
+    private import ScalarValues::*;
     
     // ============================================
     // METADATA & VERSIONING
@@ -253,22 +253,19 @@ package SaveGameModel {
     // MIGRATION RULES
     // ============================================
     
-    comment MigrationRules {
-        /**
-         * When loading older saves:
-         * 
-         * v1 -> v2:
-         *   - charClass defaults to 'warrior' if not present
-         *   - isDowned defaults to false
-         *   - downTimer defaults to 0
-         *   - formationOffset defaults to (1.5, 1.5) for non-player chars
-         * 
-         * General rules:
-         *   - Missing optional fields use sensible defaults
-         *   - Unknown fields are preserved but ignored
-         *   - Invalid values are replaced with defaults
-         *   - Corrupted saves should fail gracefully with user message
-         */
-    }
+    /* Migration Rules:
+     * 
+     * v1 -> v2:
+     *   - charClass defaults to 'warrior' if not present
+     *   - isDowned defaults to false
+     *   - downTimer defaults to 0
+     *   - formationOffset defaults to (1.5, 1.5) for non-player chars
+     * 
+     * General rules:
+     *   - Missing optional fields use sensible defaults
+     *   - Unknown fields are preserved but ignored
+     *   - Invalid values are replaced with defaults
+     *   - Corrupted saves should fail gracefully with user message
+     */
 }
 

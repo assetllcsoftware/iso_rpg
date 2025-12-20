@@ -15,6 +15,8 @@ from ..ui.inventory import InventoryUI
 from ..ui.action_bar import ActionBar
 from ..ui.skill_tree import SkillTreeUI
 from ..ui.town import TownScene, PortalButton
+from ..ui.spell_buttons import SpellButtons
+from ..ui.save_menu import SaveLoadMenu
 from ..systems.audio import audio
 from ..systems.magic import MagicSystem, SpellBook, Spell
 from ..systems.effects import EffectsManager
@@ -48,6 +50,8 @@ class Game:
         self.skill_tree = SkillTreeUI(self.screen)
         self.town_scene = TownScene(SCREEN_WIDTH, SCREEN_HEIGHT)
         self.in_town = False
+        self.spell_buttons = SpellButtons(SCREEN_WIDTH, SCREEN_HEIGHT)
+        self.save_menu = SaveLoadMenu(SCREEN_WIDTH, SCREEN_HEIGHT)
         self.portal_button = PortalButton(SCREEN_WIDTH - 70, SCREEN_HEIGHT - 130)
         self.audio = audio
         
@@ -98,10 +102,10 @@ class Game:
         hero = Character("Hero", spawn[0], spawn[1])
         hero.is_player_controlled = True
         hero.color = (140, 180, 220)
+        # Hero starts with 2 spells
         hero.spellbook = SpellBook()
-        hero.spellbook.learn_spell('fireball')
-        hero.spellbook.learn_spell('heal')
-        hero.spellbook.learn_spell('revive')  # Needs Nature Magic 3 to cast
+        hero.spellbook.learn_spell('fireball')    # Q
+        hero.spellbook.learn_spell('heal')        # W
         
         # Starting equipment
         sword = create_weapon('short_sword', level=1)
@@ -147,21 +151,16 @@ class Game:
         companion.intelligence = 16
         companion.max_mana = 80
         companion.mana = 80
-        companion.max_health = 70
-        companion.health = 70
+        companion.max_health = 120
+        companion.health = 120
         
-        # Mage skills start higher in magic
-        companion.skills[SKILL_COMBAT_MAGIC] = 3
-        companion.skills[SKILL_NATURE_MAGIC] = 3  # Can cast revive
-        companion.skills[SKILL_MELEE] = 1
+        # Mage starts at level 0 like everyone - learns spells through use
+        # (skills start at 0 by default)
         companion.skills[SKILL_RANGED] = 1
         
-        # Mage spells
+        # Lyra starts with 1 spell
         companion.spellbook = SpellBook()
-        companion.spellbook.learn_spell('fireball')
-        companion.spellbook.learn_spell('ice_shard')
-        companion.spellbook.learn_spell('heal')
-        companion.spellbook.learn_spell('revive')
+        companion.spellbook.learn_spell('ice_shard')     # A
         
         # Companion equipment - staff
         staff = create_weapon('staff', level=1)
@@ -242,6 +241,11 @@ class Game:
                 continue
             
             elif event.type == pygame.KEYDOWN:
+                # Save menu gets highest priority
+                if self.save_menu.visible:
+                    if self.save_menu.handle_event(event, self):
+                        continue
+                
                 # Skill tree gets priority for key events when visible
                 if self.skill_tree.visible:
                     if self.skill_tree.handle_event(event):
@@ -271,8 +275,16 @@ class Game:
                     self.keys_held['right'] = False
             
             elif event.type == pygame.MOUSEBUTTONDOWN:
-                # Check portal button click
                 mx, my = event.pos
+                
+                # Check spell button clicks
+                spell_click = self.spell_buttons.handle_click(mx, my)
+                if spell_click:
+                    party_idx, spell_idx = spell_click
+                    self._cast_party_spell(party_idx, spell_idx)
+                    continue
+                
+                # Check portal button click
                 if self.portal_button.handle_click(mx, my):
                     self._enter_town()
                     continue
@@ -291,6 +303,11 @@ class Game:
                     self._handle_touch_action(action)
             
             else:
+                # Save menu gets highest priority for mouse events
+                if self.save_menu.visible:
+                    if self.save_menu.handle_event(event, self):
+                        continue
+                
                 # Inventory UI gets first crack at events
                 if self.inventory_ui.visible and self.selected_character:
                     if self.inventory_ui.handle_event(event, self.selected_character, self.action_bar):
@@ -412,14 +429,14 @@ class Game:
             slot_index = key - pygame.K_1  # Convert to 0-7
             if self.selected_character:
                 self.action_bar.use_slot(slot_index, self.selected_character, self)
-        elif key == pygame.K_q:
-            self._cast_spell('fireball')
-        elif key == pygame.K_w:
-            self._cast_spell('heal')
-        elif key == pygame.K_e:
-            self._cast_spell('ice_shard')
-        elif key == pygame.K_r:
-            self._cast_spell('lightning')
+        # Spell keys per character row
+        # QWER = party[0] (main), ASDF = party[1] (ally 1), ZXCV = party[2] (ally 2)
+        elif key in (pygame.K_q, pygame.K_w, pygame.K_e, pygame.K_r):
+            self._cast_party_spell(0, [pygame.K_q, pygame.K_w, pygame.K_e, pygame.K_r].index(key))
+        elif key in (pygame.K_a, pygame.K_s, pygame.K_d, pygame.K_f):
+            self._cast_party_spell(1, [pygame.K_a, pygame.K_s, pygame.K_d, pygame.K_f].index(key))
+        elif key in (pygame.K_z, pygame.K_x, pygame.K_c, pygame.K_v):
+            self._cast_party_spell(2, [pygame.K_z, pygame.K_x, pygame.K_c, pygame.K_v].index(key))
         elif key == pygame.K_i:
             self.inventory_ui.set_party(self.party, 0)
             self.inventory_ui.toggle()
@@ -434,9 +451,9 @@ class Game:
         elif key in (pygame.K_RETURN, pygame.K_PERIOD, pygame.K_GREATER):
             self._try_descend_stairs()
         elif key == pygame.K_F5:
-            self._quick_save()
+            self.save_menu.show('save')
         elif key == pygame.K_F9:
-            self._quick_load()
+            self.save_menu.show('load')
         elif key == pygame.K_m:
             self.audio.toggle_music()
             status = "on" if self.audio.current_music else "off"
@@ -552,30 +569,113 @@ class Game:
                     self.add_notification(f"Used {item.name}")
                     return
     
-    def _cast_spell(self, spell_id):
-        """Cast a spell at target or self."""
-        if not self.selected_character:
+    def _cast_party_spell(self, party_index, spell_index):
+        """Cast a spell for a specific party member by index."""
+        if party_index >= len(self.party):
             return
         
-        char = self.selected_character
+        char = self.party[party_index]
         if not hasattr(char, 'spellbook'):
             return
         
+        spells = list(char.spellbook.spells.keys())
+        if spell_index >= len(spells):
+            return
+        
+        spell_id = spells[spell_index]
+        self._cast_spell_for_char(char, spell_id)
+    
+    def _cast_spell(self, spell_id):
+        """Cast a spell at target or self (for selected character)."""
+        if not self.selected_character:
+            return
+        self._cast_spell_for_char(self.selected_character, spell_id)
+    
+    def _cast_spell_for_char(self, char, spell_id):
+        """Cast a spell for a specific character."""
+        if not hasattr(char, 'spellbook'):
+            return
+        
+        if spell_id not in char.spellbook.spells:
+            self.add_notification("Spell not learned!", (180, 80, 80))
+            return
+        
+        spell = char.spellbook.spells[spell_id]
+        
+        # Reset AI timer for this spell (so AI waits 3x cooldown before auto-casting)
+        if hasattr(char, 'ai_spell_timers'):
+            char.ai_spell_timers[spell_id] = 0
+        
         # Determine target position
-        if self.target:
-            target_pos = (self.target.x, self.target.y)
+        actual_target = self.target
+        
+        # For offensive spells, auto-target nearest enemy if no target selected
+        if spell.damage > 0 and not actual_target:
+            nearest_enemy = None
+            nearest_dist = float('inf')
+            for enemy in self.world.enemies:
+                if enemy.health > 0:
+                    dist = ((char.x - enemy.x) ** 2 + (char.y - enemy.y) ** 2) ** 0.5
+                    if dist < nearest_dist and dist <= spell.range:
+                        nearest_dist = dist
+                        nearest_enemy = enemy
+            if nearest_enemy:
+                actual_target = nearest_enemy
+        
+        if actual_target and actual_target != char:
+            target_pos = (actual_target.x, actual_target.y)
+            
+            # Check range for offensive spells
+            if spell.damage > 0 and spell.range > 0:
+                dist = ((char.x - actual_target.x) ** 2 + (char.y - actual_target.y) ** 2) ** 0.5
+                if dist > spell.range:
+                    self.add_notification("Target out of range!", (180, 80, 80))
+                    return
         else:
+            # Self-cast (heals, buffs)
             target_pos = (char.x, char.y)
+        
+        # For chain lightning, find additional targets
+        extra_targets = None
+        if spell_id == 'chain_lightning' and self.target:
+            extra_targets = []
+            # Find up to 3 more enemies near the primary target
+            for enemy in self.world.enemies:
+                if enemy != self.target and enemy.health > 0:
+                    dist = ((enemy.x - self.target.x) ** 2 + (enemy.y - self.target.y) ** 2) ** 0.5
+                    if dist <= 4.0:  # Chain jump range
+                        extra_targets.append((enemy.x, enemy.y))
+                        if len(extra_targets) >= 3:
+                            break
         
         spell = self.magic.cast_spell(
             char, char.spellbook, spell_id, target_pos, self.world
         )
         
         if spell:
-            self.add_notification(f"Cast {spell.name}!", spell.color)
+            self.add_notification(f"{char.name}: {spell.name}!", spell.color)
             
-            # Spawn spell visual effect and sound
-            self.effects.spawn_spell(spell_id, char.x, char.y, target_pos[0], target_pos[1])
+            # Calculate damage for projectile effects
+            damage = spell.get_damage(char) if spell.damage > 0 else 0
+            
+            # Spawn spell visual effect with delayed damage
+            self.effects.spawn_spell(
+                spell_id, char.x, char.y, target_pos[0], target_pos[1], 
+                extra_targets=extra_targets,
+                damage=damage,
+                damage_target=actual_target,
+                caster=char
+            )
+            
+            # Chain lightning damages extra targets
+            if spell_id == 'chain_lightning' and extra_targets:
+                chain_damage = spell.get_damage(char)
+                for ex, ey in extra_targets:
+                    for enemy in self.world.enemies:
+                        if enemy.health > 0 and abs(enemy.x - ex) < 1.0 and abs(enemy.y - ey) < 1.0:
+                            enemy.take_damage(chain_damage, char)
+                            break
+            
             if 'heal' in spell_id:
                 self.audio.play('heal')
             elif 'fire' in spell_id:
@@ -808,12 +908,19 @@ class Game:
             attacker = event['attacker']
             target = event['target']
             if event['type'] == 'spell':
-                # Spell effect with custom color
-                spell_color = event.get('spell_color', (255, 100, 50))
-                self.effects.spawn_spell_attack(
+                # Use proper spell effect based on spell_id
+                spell_id = event.get('spell_id', 'magic_bolt')
+                damage = event.get('damage', 0)
+                delayed = event.get('delayed_damage', False)
+                
+                # Spawn spell effect - damage applied on projectile impact
+                self.effects.spawn_spell(
+                    spell_id,
                     attacker.x, attacker.y,
                     target.x, target.y,
-                    spell_color
+                    damage=damage if delayed else 0,
+                    damage_target=target if delayed else None,
+                    caster=attacker
                 )
             elif event['type'] == 'ranged':
                 self.effects.spawn_ranged_attack(
@@ -906,6 +1013,10 @@ class Game:
                 char.in_combat = False
                 continue
             
+            # Skip weapon attacks for mages - they only cast spells via AI
+            if getattr(char, 'char_class', '') == 'mage':
+                continue
+            
             if char.target:
                 dist = char.distance_to(char.target)
                 if dist <= char.attack_range:
@@ -995,6 +1106,9 @@ class Game:
         if self.selected_character:
             self.action_bar.render(self.selected_character)
         
+        # Render spell buttons (left side for mobile)
+        self.spell_buttons.render(self.screen, self.party)
+        
         # Render HUD
         game_state = {
             'party': self.party,
@@ -1012,6 +1126,9 @@ class Game:
         # Skill tree UI
         if self.skill_tree.visible and self.selected_character:
             self.skill_tree.render(self.selected_character)
+        
+        # Save/Load menu (renders on top of everything)
+        self.save_menu.render(self.screen)
         
         # Portal button (only visible in dungeon, not in menus)
         if not self.in_town and not self.inventory_ui.visible and not self.skill_tree.visible:

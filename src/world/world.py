@@ -223,6 +223,7 @@ class World:
         # Update enemies
         alive_enemies = []
         for enemy in self.enemies:
+            enemy._world_ref = self  # Give enemies access to world for collision
             if enemy.health > 0:
                 enemy.update(dt, self.characters, self.combat_events)
                 alive_enemies.append(enemy)
@@ -295,8 +296,12 @@ class World:
                         push_y += (dist_y / dist) * push_strength
         
         if abs(push_x) > 0.01 or abs(push_y) > 0.01:
-            entity.x += push_x * dt
-            entity.y += push_y * dt
+            new_x = entity.x + push_x * dt
+            new_y = entity.y + push_y * dt
+            # Only apply if new position is walkable
+            if self.is_walkable(int(new_x), int(new_y)):
+                entity.x = new_x
+                entity.y = new_y
     
     def _check_auto_revive(self):
         """Auto-revive downed allies when no enemies are nearby."""

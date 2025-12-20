@@ -56,7 +56,7 @@ class Spell:
 COMBAT_SPELLS = {
     'fireball': {
         'name': 'Fireball',
-        'mana_cost': 15,
+        'mana_cost': 8,  # Reduced for combos
         'damage': 25,
         'range': 7.0,
         'area_radius': 2.0,
@@ -67,27 +67,27 @@ COMBAT_SPELLS = {
     },
     'lightning_bolt': {
         'name': 'Lightning Bolt',
-        'mana_cost': 12,
+        'mana_cost': 6,  # Cheap and fast
         'damage': 20,
         'range': 8.0,
         'cooldown': 1.5,
-        'level_req': 3,
+        'level_req': 2,
         'color': (200, 200, 255),
         'description': 'Strikes target with a bolt of lightning.',
     },
     'ice_shard': {
         'name': 'Ice Shard',
-        'mana_cost': 8,
+        'mana_cost': 0,  # FREE - cooldown only spam spell
         'damage': 12,
         'range': 6.0,
         'cooldown': 1.0,
         'level_req': 0,
         'color': (150, 200, 255),
-        'description': 'Launches a shard of ice at the enemy.',
+        'description': 'Launches a shard of ice at the enemy. No mana cost!',
     },
     'meteor': {
         'name': 'Meteor',
-        'mana_cost': 40,
+        'mana_cost': 25,  # Big spell, still costs
         'damage': 60,
         'range': 6.0,
         'area_radius': 3.0,
@@ -98,12 +98,13 @@ COMBAT_SPELLS = {
     },
     'chain_lightning': {
         'name': 'Chain Lightning',
-        'mana_cost': 25,
+        'mana_cost': 12,  # Reduced
         'damage': 15,
         'range': 6.0,
         'cooldown': 3.0,
-        'level_req': 8,
+        'level_req': 3,
         'color': (180, 180, 255),
+        'chain_targets': 3,
         'description': 'Lightning that jumps between nearby enemies.',
     },
 }
@@ -112,7 +113,7 @@ COMBAT_SPELLS = {
 NATURE_SPELLS = {
     'heal': {
         'name': 'Heal',
-        'mana_cost': 10,
+        'mana_cost': 5,  # Cheap healing
         'heal_amount': 30,
         'range': 0,  # Self-centered
         'area_radius': 4.0,  # Heals caster + nearby allies
@@ -124,7 +125,7 @@ NATURE_SPELLS = {
     },
     'group_heal': {
         'name': 'Group Heal',
-        'mana_cost': 25,
+        'mana_cost': 15,  # Reduced
         'heal_amount': 25,
         'range': 0,
         'area_radius': 6.0,
@@ -164,7 +165,7 @@ NATURE_SPELLS = {
         'range': 5.0,
         'area_radius': 2.5,
         'cooldown': 6.0,
-        'level_req': 4,
+        'level_req': 2,
         'color': (100, 180, 50),
         'description': 'Creates a cloud of poison that damages enemies.',
     },
@@ -360,9 +361,13 @@ class MagicSystem:
             if entity:
                 targets = [entity]
         
-        # Apply immediate effects
+        # Only TRUE projectiles delay damage (fireball, ice_shard travel to target)
+        # Lightning/meteor are instant or have special handling
+        is_projectile = spell_id in ('fireball', 'ice_shard')
+        
+        # Apply immediate effects (non-projectile spells)
         for target in targets:
-            if spell.damage > 0 and hasattr(target, 'take_damage'):
+            if spell.damage > 0 and hasattr(target, 'take_damage') and not is_projectile:
                 damage = spell.get_damage(caster)
                 target.take_damage(damage, caster)
             

@@ -65,8 +65,38 @@ class Entity:
             self.is_moving = False
             return True
         
-        self.x += (dx / distance) * move_dist
-        self.y += (dy / distance) * move_dist
+        new_x = self.x + (dx / distance) * move_dist
+        new_y = self.y + (dy / distance) * move_dist
+        
+        if hasattr(self, '_world_ref') and self._world_ref:
+            # Check wall collision
+            if not self._world_ref.is_walkable(int(new_x), int(new_y)):
+                self.is_moving = False
+                return False
+            
+            # Check collision with other team before moving
+            is_self_player = hasattr(self, 'is_player_controlled') or hasattr(self, 'follow_target')
+            
+            # Get entities to check against
+            if is_self_player:
+                others = getattr(self._world_ref, 'enemies', [])
+            else:
+                others = getattr(self._world_ref, 'characters', [])
+            
+            # Check if new position would collide
+            for other in others:
+                if hasattr(other, 'health') and other.health <= 0:
+                    continue
+                odx = new_x - other.x
+                ody = new_y - other.y
+                odist = math.sqrt(odx * odx + ody * ody)
+                min_dist = self.radius + other.radius
+                if odist < min_dist * 0.8:  # Block if too close
+                    self.is_moving = True
+                    return False
+        
+        self.x = new_x
+        self.y = new_y
         self.is_moving = True
         return False
     
@@ -89,12 +119,15 @@ class Entity:
                 self.target_x, self.target_y = self.path[0]
     
     def apply_separation(self, other_entities, dt):
-        """Push away from overlapping entities."""
+        """Push away from overlapping entities (same team only)."""
         if not self.pushable:
             return
         
         push_x = 0.0
         push_y = 0.0
+        
+        # Determine if self is a player/ally
+        is_self_player = hasattr(self, 'is_player_controlled') or hasattr(self, 'follow_target')
         
         for other in other_entities:
             if other is self:
@@ -102,6 +135,13 @@ class Entity:
             if not other.blocks_movement:
                 continue
             if hasattr(other, 'health') and other.health <= 0:
+                continue
+            
+            is_other_player = hasattr(other, 'is_player_controlled') or hasattr(other, 'follow_target')
+            
+            # Only push same team - no cross-team pushing at all
+            # Players push players, enemies push enemies
+            if is_self_player != is_other_player:
                 continue
             
             dx = self.x - other.x
@@ -119,10 +159,19 @@ class Entity:
                 push_x += (dx / dist) * push_strength
                 push_y += (dy / dist) * push_strength
         
-        # Apply push
+        # Apply push (with wall check)
         if abs(push_x) > 0.01 or abs(push_y) > 0.01:
-            self.x += push_x * dt
-            self.y += push_y * dt
+            new_x = self.x + push_x * dt
+            new_y = self.y + push_y * dt
+            
+            # Don't push into walls
+            if hasattr(self, '_world_ref') and self._world_ref:
+                if self._world_ref.is_walkable(int(new_x), int(new_y)):
+                    self.x = new_x
+                    self.y = new_y
+            else:
+                self.x = new_x
+                self.y = new_y
     
     def update(self, dt):
         """Update entity state."""

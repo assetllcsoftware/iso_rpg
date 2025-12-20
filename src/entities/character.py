@@ -22,10 +22,10 @@ class Character(Entity):
         self.level = 1
         self.experience = 0
         
-        # Vitals
-        self.max_health = 100
+        # Vitals (increased for longer fights)
+        self.max_health = 150
         self.health = self.max_health
-        self.max_mana = 50
+        self.max_mana = 100
         self.mana = self.max_mana
         
         # Attributes (DS1 style - usage based)
@@ -61,6 +61,9 @@ class Character(Entity):
         self.ai_state = AI_FOLLOW
         self.follow_target = None
         self.formation_offset = (0, 0)
+        self.path_recalc_timer = 0.0  # Timer for periodic path recalculation
+        self.stuck_timer = 0.0  # Timer to detect being stuck
+        self.last_pos = (0, 0)  # Last position for stuck detection
         
         # Spells known
         self.spells = []
@@ -72,6 +75,9 @@ class Character(Entity):
         self.is_downed = False
         self.down_timer = 0.0
         self.max_down_time = 60.0  # Seconds before permanent death
+        
+        # AI spell delay (allies wait before auto-casting so player can trigger manually)
+        self.ai_spell_timers = {}  # spell_id -> time since last player could cast
     
     @property
     def current_weight(self):
@@ -147,12 +153,12 @@ class Character(Entity):
         self.skill_xp[skill] += amount
         
         # Level up skill
-        xp_needed = (self.skills[skill] + 1) * 100
+        xp_needed = int(50 * ((self.skills[skill] + 1) ** 1.5))
         while self.skill_xp[skill] >= xp_needed:
             self.skill_xp[skill] -= xp_needed
             self.skills[skill] += 1
             self._on_skill_level_up(skill)
-            xp_needed = (self.skills[skill] + 1) * 100
+            xp_needed = int(50 * ((self.skills[skill] + 1) ** 1.5))
     
     def _on_skill_level_up(self, skill):
         """Handle skill level up bonuses."""
@@ -182,6 +188,9 @@ class Character(Entity):
             'skill': skill_name,
             'new_level': self.skills[skill]
         })
+        
+        # Learn new spells at certain skill levels
+        self._check_learn_spells(skill)
         
         # Recalculate level (average of skills / 2)
         old_level = self.level
@@ -229,6 +238,44 @@ class Character(Entity):
                 'skill': 'REVIVED',
                 'new_level': 0
             })
+    
+    def _check_learn_spells(self, skill):
+        """Learn new spells when reaching required skill levels."""
+        if not hasattr(self, 'spellbook'):
+            return
+        
+        # Spells unlocked at each skill level
+        COMBAT_MAGIC_SPELLS = {
+            2: 'lightning_bolt',
+            3: 'chain_lightning',
+            5: 'meteor',
+        }
+        NATURE_MAGIC_SPELLS = {
+            2: 'poison_cloud',
+            3: 'revive',
+            4: 'regeneration',
+            5: 'group_heal',
+            8: 'summon_wolf',
+        }
+        
+        current_level = self.skills.get(skill, 0)
+        
+        if skill == SKILL_COMBAT_MAGIC:
+            spell_table = COMBAT_MAGIC_SPELLS
+        elif skill == SKILL_NATURE_MAGIC:
+            spell_table = NATURE_MAGIC_SPELLS
+        else:
+            return
+        
+        # Check if we just reached a level that unlocks a spell
+        if current_level in spell_table:
+            spell_id = spell_table[current_level]
+            if spell_id not in self.spellbook.spells:
+                self.spellbook.learn_spell(spell_id)
+                self.pending_level_ups.append({
+                    'skill': f'LEARNED: {spell_id.replace("_", " ").title()}',
+                    'new_level': 0
+                })
     
     def restore_mana(self, amount):
         """Restore mana."""
@@ -315,7 +362,7 @@ class Character(Entity):
         # Regeneration (slow)
         if not self.in_combat:
             self.health = min(self.max_health, self.health + 0.5 * dt)
-            self.mana = min(self.max_mana, self.mana + 1.0 * dt)
+            self.mana = min(self.max_mana, self.mana + 8.0 * dt)  # Fast mana regen
         
         # AI behavior
         if not self.is_player_controlled:
@@ -331,11 +378,15 @@ class Character(Entity):
         elif self.ai_state == AI_ATTACK and not self.target:
             # No enemy, go back to following
             self.ai_state = AI_FOLLOW
+            # Reset combat timer for next fight
+            self.ai_spell_timers.clear()
         
         if self.ai_state == AI_ATTACK and self.target:
             if self.target.health <= 0:
                 self.target = None
                 self.ai_state = AI_FOLLOW
+                # Reset combat timer so we wait again next fight
+                self.ai_spell_timers.clear()
                 return
             
             dist = self.distance_to(self.target)
@@ -344,45 +395,60 @@ class Character(Entity):
             char_class = getattr(self, 'char_class', 'warrior')
             
             if char_class == 'mage':
-                # Mage: cast spells, keep distance
-                # Priority 1: Self heal when low
-                if self.health < self.max_health * 0.5 and self.mana >= 20 and self.can_attack():
-                    self.mana -= 20
-                    self.attack_cooldown = 1.5
-                    heal_amount = 20 + self.intelligence
-                    self.health = min(self.max_health, self.health + heal_amount)
-                    self.gain_skill_xp(SKILL_NATURE_MAGIC, 15)
-                    # Emit heal visual
-                    if self._world_ref:
-                        self._world_ref.combat_events.append({
-                            'type': 'spell',
-                            'attacker': self,
-                            'target': self,
-                            'damage': 0,
-                            'spell_color': (100, 255, 100)
-                        })
-                # Priority 2: Attack if in range and can cast
-                elif dist <= 6.0 and self.mana >= 15 and self.can_attack():
-                    self.mana -= 15
-                    self.attack_cooldown = 1.2  # Spell cooldown
-                    damage = 15 + self.intelligence // 2
-                    self.target.take_damage(damage, self)
-                    self.gain_skill_xp(SKILL_COMBAT_MAGIC, 15)
-                    # Emit spell attack visual
-                    if self._world_ref:
-                        self._world_ref.combat_events.append({
-                            'type': 'spell',
-                            'attacker': self,
-                            'target': self.target,
-                            'damage': damage,
-                            'spell_color': (255, 100, 50)  # Fireball orange
-                        })
-                # Move closer if too far to cast
-                elif dist > 6.0:
+                # Mage AI: Wait 3x cooldown before EVERY auto-cast
+                # Mages NEVER do weapon attacks - only spells
+                
+                # Tick up all spell timers
+                for sid in list(self.ai_spell_timers.keys()):
+                    self.ai_spell_timers[sid] += dt
+                
+                casted_this_frame = False
+                
+                if dist <= 6.0 and hasattr(self, 'spellbook') and not casted_this_frame:
+                    for spell_id, spell in self.spellbook.spells.items():
+                        if spell.damage <= 0:
+                            continue
+                        
+                        if spell_id not in self.ai_spell_timers:
+                            self.ai_spell_timers[spell_id] = 0
+                        
+                        required_wait = spell.cooldown * 3.0  # 3x cooldown
+                        waited = self.ai_spell_timers[spell_id]
+                        can_cast_spell = self.spellbook.can_cast(spell_id, self)
+                        can_atk = self.can_attack()
+                        
+                        if can_cast_spell and waited >= required_wait and can_atk:
+                            print(f"*** {self.name} AUTO-CAST {spell_id} (waited {waited:.1f}s >= {required_wait:.1f}s) ***")
+                            self.mana -= spell.mana_cost
+                            self.attack_cooldown = spell.cooldown
+                            self.spellbook.cooldowns[spell_id] = spell.cooldown
+                            self.ai_spell_timers[spell_id] = 0
+                            
+                            damage = spell.get_damage(self)
+                            # Don't apply damage here - let the projectile effect do it on impact
+                            self.gain_skill_xp(SKILL_COMBAT_MAGIC, 15)
+                            
+                            if self._world_ref:
+                                self._world_ref.combat_events.append({
+                                    'type': 'spell',
+                                    'spell_id': spell_id,
+                                    'attacker': self,
+                                    'target': self.target,
+                                    'damage': damage,  # Damage to apply on impact
+                                    'spell_color': spell.color,
+                                    'delayed_damage': True  # Flag for delayed damage
+                                })
+                            casted_this_frame = True
+                            break
+                
+                # Move closer if too far (but don't attack)
+                if dist > 6.0:
                     self.set_path([(self.target.x, self.target.y)])
-                # Keep distance from enemies if too close
                 elif dist < 3.0 and self.follow_target:
                     self.set_path([(self.follow_target.x, self.follow_target.y)])
+                
+                # IMPORTANT: Return here so mage doesn't fall through to other AI
+                return
                     
             elif char_class == 'ranger':
                 # Ranger: ranged attacks, medium distance
@@ -428,8 +494,43 @@ class Character(Entity):
             target_x = self.follow_target.x + self.formation_offset[0]
             target_y = self.follow_target.y + self.formation_offset[1]
             
-            # Step aside if too close to player
             player_dist = self.distance_to(self.follow_target)
+            dist = self.distance_to((target_x, target_y))
+            
+            # Stuck detection - if we haven't moved much and far from player
+            moved = ((self.x - self.last_pos[0]) ** 2 + (self.y - self.last_pos[1]) ** 2) ** 0.5
+            if moved < 0.5:
+                self.stuck_timer += dt
+            else:
+                self.stuck_timer = 0.0
+            self.last_pos = (self.x, self.y)
+            
+            # Teleport to player if stuck for 2+ seconds and far away
+            if self.stuck_timer > 2.0 and player_dist > 4.0:
+                print(f"[DEBUG] {self.name} TELEPORTING - stuck {self.stuck_timer:.1f}s, dist {player_dist:.1f}")
+                # Find a walkable spot near player
+                teleported = False
+                if hasattr(self, '_world_ref') and self._world_ref:
+                    for offset in [(1.5, 0), (0, 1.5), (-1.5, 0), (0, -1.5), (1, 1), (-1, 1), (1, -1), (-1, -1)]:
+                        new_x = self.follow_target.x + offset[0]
+                        new_y = self.follow_target.y + offset[1]
+                        if self._world_ref.is_walkable(int(new_x), int(new_y)):
+                            self.x = new_x
+                            self.y = new_y
+                            self.path = []
+                            self.stuck_timer = 0.0
+                            teleported = True
+                            print(f"[DEBUG] {self.name} teleported to ({new_x:.1f}, {new_y:.1f})")
+                            break
+                if not teleported:
+                    # Force teleport to player position as last resort
+                    self.x = self.follow_target.x + 1
+                    self.y = self.follow_target.y + 1
+                    self.path = []
+                    self.stuck_timer = 0.0
+                    print(f"[DEBUG] {self.name} FORCE teleported next to player")
+            
+            # Step aside if too close to player
             if player_dist < 1.0:
                 dx = self.x - self.follow_target.x
                 dy = self.y - self.follow_target.y
@@ -437,9 +538,29 @@ class Character(Entity):
                     self.x += (dx / player_dist) * 2.0 * dt
                     self.y += (dy / player_dist) * 2.0 * dt
             
-            dist = self.distance_to((target_x, target_y))
-            if dist > 2.0:
-                self.set_path([(target_x, target_y)])
+            # Periodic path recalculation (every 1.5 seconds) to unstick
+            self.path_recalc_timer += dt
+            should_recalc = self.path_recalc_timer >= 1.5
+            
+            # Also recalc if stuck (not moving but have a path and far from target)
+            if self.path and not self.is_moving and dist > 3.0:
+                should_recalc = True
+            
+            if dist > 2.0 and (not self.path or should_recalc):
+                self.path_recalc_timer = 0.0
+                # Use A* pathfinding if available
+                if hasattr(self, '_world_ref') and self._world_ref:
+                    new_path = self._world_ref.find_path(
+                        (int(self.x), int(self.y)),
+                        (int(target_x), int(target_y))
+                    )
+                    if new_path:
+                        self.set_path(new_path)
+                    else:
+                        # Fallback to direct path
+                        self.set_path([(target_x, target_y)])
+                else:
+                    self.set_path([(target_x, target_y)])
     
     def _find_nearest_enemy(self):
         """Find nearest enemy within aggro range."""

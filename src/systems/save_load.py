@@ -160,7 +160,7 @@ def deserialize_character(data, is_main=False):
     for slot, item_data in data['equipment'].items():
         char.equipment[slot] = deserialize_item(item_data)
     
-    # Spells
+    # Spells - restore exactly what was saved
     char.spellbook = SpellBook()
     for spell_id in data.get('spells_known', []):
         char.spellbook.learn_spell(spell_id)
