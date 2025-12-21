@@ -17,7 +17,7 @@ class Entity:
         self.target_x = self.x
         self.target_y = self.y
         
-        self.speed = 3.0  # Tiles per second
+        self.speed = 5.0  # Tiles per second
         self.is_moving = False
         self.path = []
         

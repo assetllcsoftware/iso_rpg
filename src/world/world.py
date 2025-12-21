@@ -42,11 +42,18 @@ class World:
             seed = random.randint(0, 2**31 - 1)
         self.dungeon_seed = seed
         
-        self.dungeon_gen = DungeonGenerator(self.width, self.height, seed)
+        # Scale dungeon size modestly with level
+        scaled_width = min(80 + level * 2, 120)
+        scaled_height = min(80 + level * 2, 120)
+        self.dungeon_gen = DungeonGenerator(scaled_width, scaled_height, seed)
         
         # More rooms for higher levels
-        num_rooms = 8 + level
+        num_rooms = 10 + level
         self.tiles = self.dungeon_gen.generate(num_rooms=num_rooms)
+        
+        # Update world dimensions to match actual dungeon
+        self.width = scaled_width
+        self.height = scaled_height
         
         # Place stairs to next level
         self.stairs_down_pos = self.dungeon_gen.place_stairs()
@@ -60,9 +67,10 @@ class World:
         else:
             self.stairs_up_pos = None
         
-        # Spawn enemies
+        # Spawn enemies - scales faster at higher levels
         self.enemies = []
-        enemy_spawns = self.dungeon_gen.get_enemy_spawn_points(5 + level * 2)
+        num_enemies = 5 + level * 3 + (level // 5) * 5  # +3/level, +5 every 5 levels
+        enemy_spawns = self.dungeon_gen.get_enemy_spawn_points(num_enemies)
         
         enemy_types = ['goblin', 'skeleton', 'spider']
         if level >= 3:
@@ -102,7 +110,11 @@ class World:
     
     def is_walkable(self, x, y):
         """Check if a tile is walkable."""
-        if x < 0 or x >= self.width or y < 0 or y >= self.height:
+        # Use actual tile array dimensions, not original world size
+        if self.tiles is None:
+            return False
+        tile_height, tile_width = self.tiles.shape
+        if x < 0 or x >= tile_width or y < 0 or y >= tile_height:
             return False
         tile = self.tiles[int(y), int(x)]
         return tile in (TILE_FLOOR, TILE_DOOR, TILE_STAIRS_DOWN, TILE_STAIRS_UP)

@@ -156,7 +156,7 @@ class HUD:
         self.screen.blit(gold_text, (x + total_width + 20, y + 25))
     
     def _render_minimap(self, game_state):
-        """Render minimap in top right corner."""
+        """Render minimap centered on player with limited view radius."""
         x = SCREEN_WIDTH - self.minimap_size - self.padding
         y = self.padding
         
@@ -164,38 +164,62 @@ class HUD:
         self.minimap_surface.fill((20, 18, 25))
         
         world = game_state.get('world')
-        if world and world.tiles is not None:
-            # Draw tiles
-            scale_x = self.minimap_size / world.width
-            scale_y = self.minimap_size / world.height
+        party = game_state.get('party', [])
+        
+        if world and world.tiles is not None and party:
+            player = party[0]
             
-            for ty in range(world.height):
-                for tx in range(world.width):
-                    tile = world.tiles[ty, tx]
-                    if tile == 1:  # Floor
-                        color = (60, 55, 70)
-                    elif tile == 2:  # Wall
-                        color = (90, 80, 100)
-                    else:
-                        continue
+            # Show area around player (30 tile radius)
+            view_radius = 30
+            view_size = view_radius * 2
+            
+            # Scale: minimap pixels per world tile
+            scale = self.minimap_size / view_size
+            
+            # Calculate view bounds centered on player
+            view_left = int(player.x - view_radius)
+            view_top = int(player.y - view_radius)
+            
+            # Draw tiles in view
+            for dy in range(view_size):
+                for dx in range(view_size):
+                    tx = view_left + dx
+                    ty = view_top + dy
                     
-                    mx = int(tx * scale_x)
-                    my = int(ty * scale_y)
-                    pygame.draw.rect(self.minimap_surface, color,
-                                   (mx, my, max(1, int(scale_x)), max(1, int(scale_y))))
+                    if 0 <= tx < world.tiles.shape[1] and 0 <= ty < world.tiles.shape[0]:
+                        tile = world.tiles[ty, tx]
+                        if tile == 1:  # Floor
+                            color = (60, 55, 70)
+                        elif tile == 2:  # Wall
+                            color = (90, 80, 100)
+                        elif tile == 6:  # Stairs down
+                            color = (100, 200, 100)
+                        elif tile == 7:  # Stairs up
+                            color = (100, 150, 220)
+                        else:
+                            continue
+                        
+                        mx = int(dx * scale)
+                        my = int(dy * scale)
+                        size = max(2, int(scale))
+                        pygame.draw.rect(self.minimap_surface, color, (mx, my, size, size))
             
-            # Draw party
-            for char in game_state.get('party', []):
-                mx = int(char.x * scale_x)
-                my = int(char.y * scale_y)
-                pygame.draw.circle(self.minimap_surface, (100, 180, 255), (mx, my), 3)
+            # Draw party (always centered)
+            for char in party:
+                mx = int((char.x - view_left) * scale)
+                my = int((char.y - view_top) * scale)
+                if 0 <= mx < self.minimap_size and 0 <= my < self.minimap_size:
+                    pygame.draw.circle(self.minimap_surface, (100, 180, 255), (mx, my), 4)
             
-            # Draw enemies
+            # Draw nearby enemies only
             for enemy in world.enemies:
                 if enemy.health > 0:
-                    mx = int(enemy.x * scale_x)
-                    my = int(enemy.y * scale_y)
-                    pygame.draw.circle(self.minimap_surface, (255, 80, 80), (mx, my), 2)
+                    dist = abs(enemy.x - player.x) + abs(enemy.y - player.y)
+                    if dist < view_radius:
+                        mx = int((enemy.x - view_left) * scale)
+                        my = int((enemy.y - view_top) * scale)
+                        if 0 <= mx < self.minimap_size and 0 <= my < self.minimap_size:
+                            pygame.draw.circle(self.minimap_surface, (255, 80, 80), (mx, my), 3)
         
         self.screen.blit(self.minimap_surface, (x, y))
         pygame.draw.rect(self.screen, COLOR_UI_BORDER, 

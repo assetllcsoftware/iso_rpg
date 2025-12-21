@@ -226,6 +226,23 @@ def load_game(game, slot=1):
         if char.is_player_controlled and main_char is None:
             main_char = char
     
+    # Snap all characters to valid floor tiles (in case dungeon changed)
+    for char in game.party:
+        if not game.world.is_walkable(int(char.x), int(char.y)):
+            # Find nearest walkable tile
+            valid_pos = game.world._find_nearest_walkable((int(char.x), int(char.y)))
+            if valid_pos:
+                char.x = float(valid_pos[0]) + 0.5
+                char.y = float(valid_pos[1]) + 0.5
+                print(f"[Load] Snapped {char.name} to valid position ({char.x:.1f}, {char.y:.1f})")
+            else:
+                # Fallback: use spawn point
+                spawn = game.world.dungeon_gen.get_spawn_points(1)
+                if spawn:
+                    char.x = float(spawn[0][0]) + 0.5
+                    char.y = float(spawn[0][1]) + 0.5
+                    print(f"[Load] Moved {char.name} to spawn point")
+    
     # Setup party relationships
     if len(game.party) > 1 and main_char:
         for char in game.party[1:]:

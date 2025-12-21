@@ -57,9 +57,9 @@ class DungeonGenerator:
         self.rooms = []
         self.corridors = []
         
-        # Generate rooms
+        # Generate rooms (more attempts = more rooms placed)
         attempts = 0
-        max_attempts = num_rooms * 20
+        max_attempts = num_rooms * 50
         
         while len(self.rooms) < num_rooms and attempts < max_attempts:
             attempts += 1
@@ -71,10 +71,10 @@ class DungeonGenerator:
             
             new_room = Room(x, y, w, h)
             
-            # Check for intersections
+            # Check for intersections (smaller margin = more rooms can fit)
             valid = True
             for room in self.rooms:
-                if new_room.intersects(room, margin=2):
+                if new_room.intersects(room, margin=1):
                     valid = False
                     break
             
@@ -183,11 +183,21 @@ class DungeonGenerator:
         points = []
         
         for room in self.rooms[1:]:  # Skip first room (player spawn)
-            # Add a few spawn points per room
-            for _ in range(random.randint(1, 3)):
-                x = random.randint(room.x + 1, room.x2 - 2)
-                y = random.randint(room.y + 1, room.y2 - 2)
+            # Room size determines how many enemies can spawn
+            room_area = room.width * room.height
+            max_in_room = max(2, min(6, room_area // 20))  # 2-6 per room based on size
+            
+            for _ in range(random.randint(1, max_in_room)):
+                x = random.randint(room.x + 1, max(room.x + 2, room.x2 - 2))
+                y = random.randint(room.y + 1, max(room.y + 2, room.y2 - 2))
                 points.append((x, y))
+        
+        # If we still need more points, add extra to larger rooms
+        while len(points) < num_points and self.rooms:
+            room = random.choice(self.rooms[1:]) if len(self.rooms) > 1 else self.rooms[0]
+            x = random.randint(room.x + 1, max(room.x + 2, room.x2 - 2))
+            y = random.randint(room.y + 1, max(room.y + 2, room.y2 - 2))
+            points.append((x, y))
         
         random.shuffle(points)
         return points[:num_points]

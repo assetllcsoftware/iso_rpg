@@ -92,7 +92,8 @@ class Game:
         self.paused = False
         
         # Create world
-        self.world = World(60, 60)
+        # Dungeon size grows with level (starts 60x60, grows 5 per level)
+        self.world = World(80, 80)
         spawn_points = self.world.generate_dungeon(level=1)
         
         # Create party

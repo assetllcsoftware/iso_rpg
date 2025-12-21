@@ -439,8 +439,11 @@ class IsometricRenderer:
         """Render an entity at its world position."""
         screen_x, screen_y = camera.world_to_screen(entity.x, entity.y)
         
-        # Sprite size scales with zoom
-        base_size = 32
+        # Sprite size scales with zoom - hero/mage are larger (48px), enemies are 32px
+        if hasattr(entity, 'is_player_controlled'):
+            base_size = 48  # Hero and allies use larger sprites
+        else:
+            base_size = 32  # Enemies use standard size
         size = int(base_size * camera.zoom)
         
         # Check if entity is downed
@@ -528,8 +531,9 @@ class IsometricRenderer:
         if not frame:
             return False
         
-        # Scale sprite
-        if size != 32:
+        # Scale sprite to match target size
+        sprite_size = frame.get_width()  # Get actual sprite size (32 or 48)
+        if size != sprite_size:
             frame = pygame.transform.scale(frame, (size, size))
         
         # Draw sprite centered
@@ -577,7 +581,8 @@ class IsometricRenderer:
     def render_selection(self, entity, camera):
         """Render selection indicator around entity."""
         screen_x, screen_y = camera.world_to_screen(entity.x, entity.y)
-        size = int(32 * camera.zoom)
+        base_size = 48 if hasattr(entity, 'is_player_controlled') else 32
+        size = int(base_size * camera.zoom)
         
         # Pulsing selection circle
         time = pygame.time.get_ticks() / 1000
