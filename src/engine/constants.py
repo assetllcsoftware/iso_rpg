@@ -1,8 +1,8 @@
 """Game constants and configuration."""
 
 # Display settings (landscape mobile)
-SCREEN_WIDTH = 1280
-SCREEN_HEIGHT = 720
+SCREEN_WIDTH = 1920
+SCREEN_HEIGHT = 1080
 FPS = 60
 
 # Isometric tile dimensions
@@ -27,8 +27,9 @@ TILE_FLOOR = 1
 TILE_WALL = 2
 TILE_DOOR = 3
 TILE_STAIRS_DOWN = 4
-TILE_WATER = 5
-TILE_LAVA = 6
+TILE_STAIRS_UP = 5
+TILE_WATER = 6
+TILE_LAVA = 7
 
 # Entity layers
 LAYER_FLOOR = 0

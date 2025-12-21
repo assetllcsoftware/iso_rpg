@@ -12,9 +12,9 @@ class Camera:
         self.y = 0.0
         self.target_x = 0.0
         self.target_y = 0.0
-        self.zoom = 1.0
-        self.min_zoom = 0.5
-        self.max_zoom = 2.0
+        self.zoom = 1.5
+        self.min_zoom = 0.75
+        self.max_zoom = 3.0
         self.smooth_speed = 8.0
         self.dragging = False
         self.drag_start = None

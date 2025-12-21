@@ -2,7 +2,7 @@
 
 import random
 import numpy as np
-from ..engine.constants import TILE_EMPTY, TILE_FLOOR, TILE_WALL, TILE_DOOR, TILE_STAIRS_DOWN
+from ..engine.constants import TILE_EMPTY, TILE_FLOOR, TILE_WALL, TILE_DOOR, TILE_STAIRS_DOWN, TILE_STAIRS_UP
 
 
 class Room:
@@ -193,7 +193,7 @@ class DungeonGenerator:
         return points[:num_points]
     
     def place_stairs(self):
-        """Place stairs in the last room."""
+        """Place stairs down in the last room."""
         if len(self.rooms) < 2:
             # Fallback - place in center of map
             cx, cy = self.width // 2, self.height // 2
@@ -207,7 +207,28 @@ class DungeonGenerator:
         # Make sure it's a valid floor tile
         self.tiles[stairs_y, stairs_x] = TILE_STAIRS_DOWN
         
-        print(f"[DEBUG] Stairs placed at ({stairs_x}, {stairs_y})")
+        print(f"[DEBUG] Stairs down placed at ({stairs_x}, {stairs_y})")
         
         return (stairs_x, stairs_y)
+    
+    def place_stairs_up(self, spawn_x, spawn_y):
+        """Place stairs up near the spawn point (for returning to previous level)."""
+        # Find a spot near spawn but not on spawn
+        for dx, dy in [(2, 0), (-2, 0), (0, 2), (0, -2), (2, 2), (-2, -2)]:
+            x, y = spawn_x + dx, spawn_y + dy
+            if 0 <= x < self.width and 0 <= y < self.height:
+                if self.tiles[y, x] == TILE_FLOOR:
+                    self.tiles[y, x] = TILE_STAIRS_UP
+                    print(f"[DEBUG] Stairs up placed at ({x}, {y})")
+                    return (x, y)
+        
+        # Fallback - use first room corner
+        if self.rooms:
+            room = self.rooms[0]
+            x, y = room.x + 1, room.y + 1
+            self.tiles[y, x] = TILE_STAIRS_UP
+            print(f"[DEBUG] Stairs up placed at ({x}, {y}) (fallback)")
+            return (x, y)
+        
+        return None
 

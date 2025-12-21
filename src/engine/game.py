@@ -814,15 +814,21 @@ class Game:
             self.add_notification(f"Picked up {item.name}", color)
             self.audio.play('pickup')
     
-    def _try_descend_stairs(self):
-        """Try to go down stairs."""
+    def _try_use_stairs(self):
+        """Try to use stairs (up or down)."""
         if not self.selected_character:
             return
         
         if self.world.is_on_stairs(self.selected_character):
             self._descend_to_next_level()
+        elif self.world.is_on_stairs_up(self.selected_character):
+            self._ascend_to_previous_level()
         else:
             self.add_notification("No stairs here!", (150, 150, 150))
+    
+    def _try_descend_stairs(self):
+        """Try to go down stairs (legacy, calls _try_use_stairs)."""
+        self._try_use_stairs()
     
     def _descend_to_next_level(self):
         """Go to the next dungeon level."""
@@ -851,6 +857,79 @@ class Game:
         self.camera.follow(self.selected_character.x, self.selected_character.y, instant=True)
         
         self.add_notification(f"Welcome to level {next_level}!", (180, 140, 90))
+        self.audio.play('stairs')
+    
+    def _respawn_party(self):
+        """Respawn party at level start with gold penalty."""
+        # Calculate gold penalty (10%)
+        gold_lost = int(self.gold * 0.10)
+        self.gold -= gold_lost
+        
+        # Get spawn point for current level
+        spawn_points = self.world.dungeon_gen.get_spawn_points(1)
+        spawn = spawn_points[0] if spawn_points else (30, 30)
+        
+        # Revive and heal all party members
+        for i, char in enumerate(self.party):
+            char.health = char.max_health
+            char.mana = char.max_mana
+            char.is_downed = False
+            char.x = spawn[0] + (i % 2) * 1.5
+            char.y = spawn[1] + (i // 2) * 1.5
+            char.path = []
+            char.target = None
+            char.in_combat = False
+        
+        # Clear targets and combat
+        self.target = None
+        
+        # Center camera
+        self.camera.follow(self.selected_character.x, self.selected_character.y, instant=True)
+        
+        # Notification
+        if gold_lost > 0:
+            self.add_notification(f"You died! Lost {gold_lost} gold.", (200, 100, 100))
+        else:
+            self.add_notification("You died! Respawning...", (200, 100, 100))
+        
+        self.audio.play('error')
+    
+    def _ascend_to_previous_level(self):
+        """Go back to the previous dungeon level."""
+        if self.world.level <= 1:
+            self.add_notification("You're already at level 1!", (150, 150, 150))
+            return
+        
+        prev_level = self.world.level - 1
+        
+        self.add_notification(f"Ascending to level {prev_level}...", (100, 150, 220))
+        
+        # Generate previous level (will be regenerated, enemies respawned)
+        spawn_points = self.world.generate_dungeon(level=prev_level)
+        spawn = spawn_points[0] if spawn_points else (30, 30)
+        
+        # Move party to spawn (near stairs down on previous level)
+        # Position near the stairs down since that's where they would have descended from
+        stairs_pos = self.world.stairs_down_pos
+        if stairs_pos:
+            spawn = (stairs_pos[0], stairs_pos[1])
+        
+        for i, char in enumerate(self.party):
+            char.x = spawn[0] + (i % 2) * 1.5
+            char.y = spawn[1] + (i // 2) * 1.5
+            char.path = []
+            char.target = None
+        
+        # Update world reference
+        self.world.characters = self.party
+        
+        # Reset target
+        self.target = None
+        
+        # Camera to new position
+        self.camera.follow(self.selected_character.x, self.selected_character.y, instant=True)
+        
+        self.add_notification(f"Back to level {prev_level}!", (100, 150, 220))
         self.audio.play('stairs')
     
     def _quick_save(self):
@@ -969,22 +1048,27 @@ class Game:
             self.add_notification(f"Defeated {self.target.name}!", (180, 140, 90))
             self.target = None
         
-        # Check for party wipe (game over)
-        alive_count = sum(1 for char in self.party if char.health > 0)
-        if alive_count == 0:
-            self.game_over = True
-            self.game_over_timer = 0
+        # Check for party wipe - respawn at level start with gold penalty
+        alive_count = sum(1 for char in self.party if not getattr(char, 'is_downed', False) and char.health > 0)
+        if alive_count == 0 and len(self.party) > 0:
+            self._respawn_party()
         
         # Check for level ups
         self._check_level_ups()
         
         # Check if on stairs - show prompt
-        if self.selected_character and self.world.is_on_stairs(self.selected_character):
-            if not hasattr(self, '_stairs_prompt_shown') or not self._stairs_prompt_shown:
-                self.add_notification("Press ENTER to descend stairs", (100, 200, 100))
-                self._stairs_prompt_shown = True
-        else:
-            self._stairs_prompt_shown = False
+        if self.selected_character:
+            if self.world.is_on_stairs(self.selected_character):
+                if not hasattr(self, '_stairs_prompt_shown') or not self._stairs_prompt_shown:
+                    self.add_notification("Press ENTER to descend", (100, 200, 100))
+                    self._stairs_prompt_shown = True
+            elif self.world.is_on_stairs_up(self.selected_character):
+                if not hasattr(self, '_stairs_up_prompt_shown') or not self._stairs_up_prompt_shown:
+                    self.add_notification("Press ENTER to ascend", (100, 150, 220))
+                    self._stairs_up_prompt_shown = True
+            else:
+                self._stairs_prompt_shown = False
+                self._stairs_up_prompt_shown = False
     
     def _check_level_ups(self):
         """Check for and display level up notifications."""

@@ -214,8 +214,8 @@ class Character(Entity):
         
         self.health = max(0, self.health - amount)
         
-        # Go into downed state instead of dying (except player)
-        if self.health <= 0 and not self.is_player_controlled:
+        # Go into downed state instead of dying (all characters including player)
+        if self.health <= 0:
             self.is_downed = True
             self.down_timer = 0.0
             self.health = 0

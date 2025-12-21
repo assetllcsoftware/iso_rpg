@@ -3,7 +3,7 @@
 import heapq
 import numpy as np
 from .dungeon import DungeonGenerator
-from ..engine.constants import TILE_FLOOR, TILE_DOOR, TILE_STAIRS_DOWN
+from ..engine.constants import TILE_FLOOR, TILE_DOOR, TILE_STAIRS_DOWN, TILE_STAIRS_UP
 from ..entities.enemy import Enemy
 
 
@@ -24,8 +24,10 @@ class World:
         # Current level
         self.level = 1
         
-        # Stairs position
-        self.stairs_pos = None
+        # Stairs positions
+        self.stairs_down_pos = None
+        self.stairs_up_pos = None
+        self.stairs_pos = None  # Legacy, points to stairs_down
         
         # Combat events for visual effects
         self.combat_events = []
@@ -47,7 +49,16 @@ class World:
         self.tiles = self.dungeon_gen.generate(num_rooms=num_rooms)
         
         # Place stairs to next level
-        self.stairs_pos = self.dungeon_gen.place_stairs()
+        self.stairs_down_pos = self.dungeon_gen.place_stairs()
+        self.stairs_pos = self.stairs_down_pos  # Legacy compatibility
+        
+        # Place stairs up on level 2+ (to go back to previous level)
+        if level > 1:
+            spawn = self.dungeon_gen.get_spawn_points(1)
+            if spawn:
+                self.stairs_up_pos = self.dungeon_gen.place_stairs_up(spawn[0][0], spawn[0][1])
+        else:
+            self.stairs_up_pos = None
         
         # Spawn enemies
         self.enemies = []
@@ -94,18 +105,25 @@ class World:
         if x < 0 or x >= self.width or y < 0 or y >= self.height:
             return False
         tile = self.tiles[int(y), int(x)]
-        return tile in (TILE_FLOOR, TILE_DOOR, TILE_STAIRS_DOWN)
+        return tile in (TILE_FLOOR, TILE_DOOR, TILE_STAIRS_DOWN, TILE_STAIRS_UP)
     
     def is_on_stairs(self, entity):
-        """Check if an entity is standing on stairs."""
-        if not self.stairs_pos:
+        """Check if an entity is standing on stairs down."""
+        if not self.stairs_down_pos:
             return False
-        # Use tile position for more reliable detection
         entity_tile_x = int(entity.x)
         entity_tile_y = int(entity.y)
-        stairs_x, stairs_y = self.stairs_pos
-        
-        # Check if on same tile or adjacent
+        stairs_x, stairs_y = self.stairs_down_pos
+        dist = abs(entity_tile_x - stairs_x) + abs(entity_tile_y - stairs_y)
+        return dist <= 1
+    
+    def is_on_stairs_up(self, entity):
+        """Check if an entity is standing on stairs up."""
+        if not self.stairs_up_pos:
+            return False
+        entity_tile_x = int(entity.x)
+        entity_tile_y = int(entity.y)
+        stairs_x, stairs_y = self.stairs_up_pos
         dist = abs(entity_tile_x - stairs_x) + abs(entity_tile_y - stairs_y)
         return dist <= 1
     
