@@ -52,142 +52,203 @@ class Spell:
         return int(base * (1 + int_bonus + skill_bonus))
 
 
-# Combat Magic Spells
+# Combat Magic Spells - Exponential cooldowns: ~1s -> ~3s -> ~10s -> ~30s
 COMBAT_SPELLS = {
-    'fireball': {
-        'name': 'Fireball',
-        'mana_cost': 8,  # Reduced for combos
-        'damage': 25,
-        'range': 7.0,
-        'area_radius': 2.0,
-        'cooldown': 2.0,
-        'level_req': 0,
-        'color': (255, 100, 50),
-        'description': 'Hurls a ball of fire that explodes on impact.',
-    },
-    'lightning_bolt': {
-        'name': 'Lightning Bolt',
-        'mana_cost': 6,  # Cheap and fast
-        'damage': 20,
-        'range': 8.0,
-        'cooldown': 1.5,
-        'level_req': 2,
-        'color': (200, 200, 255),
-        'description': 'Strikes target with a bolt of lightning.',
-    },
+    # TIER 1: Starter spells - ~1s cooldown, spammable
     'ice_shard': {
         'name': 'Ice Shard',
         'mana_cost': 0,  # FREE - cooldown only spam spell
-        'damage': 12,
+        'damage': 10,
         'range': 6.0,
         'cooldown': 1.0,
         'level_req': 0,
         'color': (150, 200, 255),
-        'description': 'Launches a shard of ice at the enemy. No mana cost!',
+        'description': 'Fast ice projectile. No mana cost!',
     },
-    'meteor': {
-        'name': 'Meteor',
-        'mana_cost': 25,  # Big spell, still costs
-        'damage': 60,
-        'range': 6.0,
-        'area_radius': 3.0,
-        'cooldown': 5.0,
-        'level_req': 15,
-        'color': (255, 150, 100),
-        'description': 'Calls down a devastating meteor from the sky.',
+    'fireball': {
+        'name': 'Fireball',
+        'mana_cost': 5,
+        'damage': 15,
+        'range': 7.0,
+        'area_radius': 1.5,
+        'cooldown': 1.5,
+        'level_req': 0,
+        'color': (255, 100, 50),
+        'description': 'Explosive fire damage. Good starter spell.',
+    },
+    
+    # TIER 2: Early unlocks - ~3s cooldown, medium power
+    'lightning_bolt': {
+        'name': 'Lightning Bolt',
+        'mana_cost': 8,
+        'damage': 35,
+        'range': 8.0,
+        'cooldown': 3.0,
+        'level_req': 2,
+        'color': (200, 200, 255),
+        'description': 'Instant lightning strike. Good damage.',
     },
     'chain_lightning': {
         'name': 'Chain Lightning',
-        'mana_cost': 12,  # Reduced
-        'damage': 15,
+        'mana_cost': 15,
+        'damage': 25,
         'range': 6.0,
-        'cooldown': 3.0,
+        'cooldown': 4.0,
         'level_req': 3,
         'color': (180, 180, 255),
         'chain_targets': 3,
-        'description': 'Lightning that jumps between nearby enemies.',
+        'description': 'Jumps to 3 nearby enemies. Great for groups.',
+    },
+    
+    # TIER 3: Mid-game - ~10s cooldown, high power
+    'inferno': {
+        'name': 'Inferno',
+        'mana_cost': 25,
+        'damage': 80,
+        'range': 6.0,
+        'area_radius': 3.0,
+        'cooldown': 10.0,
+        'level_req': 5,
+        'color': (255, 80, 30),
+        'description': 'Massive fire explosion. Devastating AoE.',
+    },
+    'blizzard': {
+        'name': 'Blizzard',
+        'mana_cost': 30,
+        'damage': 60,
+        'range': 7.0,
+        'area_radius': 4.0,
+        'cooldown': 12.0,
+        'level_req': 6,
+        'color': (180, 220, 255),
+        'description': 'Frozen storm damages all in area.',
+    },
+    
+    # TIER 4: Late-game - ~30s cooldown, massive power
+    'meteor': {
+        'name': 'Meteor',
+        'mana_cost': 50,
+        'damage': 200,
+        'range': 6.0,
+        'area_radius': 4.0,
+        'cooldown': 30.0,
+        'level_req': 10,
+        'color': (255, 150, 100),
+        'description': 'Devastating meteor from the sky. Ultimate destruction.',
+    },
+    'armageddon': {
+        'name': 'Armageddon',
+        'mana_cost': 80,
+        'damage': 150,
+        'range': 0,  # Centered on caster
+        'area_radius': 8.0,
+        'cooldown': 45.0,
+        'level_req': 15,
+        'color': (255, 50, 50),
+        'description': 'Rain of fire around you. Destroys everything nearby.',
     },
 }
 
-# Nature Magic Spells
+# Nature Magic Spells - Exponential cooldowns: ~1s -> ~3s -> ~10s -> ~30s
 NATURE_SPELLS = {
+    # TIER 1: Starter spells - ~1s cooldown
     'heal': {
         'name': 'Heal',
-        'mana_cost': 5,  # Cheap healing
-        'heal_amount': 30,
-        'range': 0,  # Self-centered
-        'area_radius': 4.0,  # Heals caster + nearby allies
+        'mana_cost': 5,
+        'heal_amount': 25,
+        'range': 0,
+        'area_radius': 3.0,
         'cooldown': 1.5,
         'level_req': 0,
         'color': (100, 255, 100),
-        'description': 'Heals you and nearby allies.',
+        'description': 'Quick heal for you and nearby allies.',
         'heals_party': True,
     },
-    'group_heal': {
-        'name': 'Group Heal',
-        'mana_cost': 15,  # Reduced
-        'heal_amount': 25,
-        'range': 0,
-        'area_radius': 6.0,
+    
+    # TIER 2: Early unlocks - ~3s cooldown
+    'poison_cloud': {
+        'name': 'Poison Cloud',
+        'mana_cost': 12,
+        'damage': 15,  # Per second
+        'duration': 4.0,
+        'range': 5.0,
+        'area_radius': 2.5,
         'cooldown': 4.0,
-        'level_req': 5,
-        'color': (150, 255, 150),
-        'description': 'Powerful heal for all nearby party members.',
-        'heals_party': True,
+        'level_req': 2,
+        'color': (100, 180, 50),
+        'description': 'Poison cloud deals damage over time.',
+    },
+    'entangle': {
+        'name': 'Entangle',
+        'mana_cost': 10,
+        'duration': 3.0,
+        'range': 5.0,
+        'area_radius': 2.0,
+        'cooldown': 3.0,
+        'level_req': 2,
+        'color': (80, 150, 50),
+        'description': 'Roots enemies in place.',
     },
     'revive': {
         'name': 'Revive',
-        'mana_cost': 35,
-        'heal_amount': 50,  # % of max health restored
+        'mana_cost': 20,
+        'heal_amount': 50,  # % of max health
         'range': 3.0,
-        'cooldown': 10.0,
+        'cooldown': 5.0,
         'level_req': 3,
         'color': (255, 255, 150),
         'description': 'Revives a downed ally.',
         'revives': True,
     },
+    
+    # TIER 3: Mid-game - ~10s cooldown
+    'group_heal': {
+        'name': 'Group Heal',
+        'mana_cost': 25,
+        'heal_amount': 60,
+        'range': 0,
+        'area_radius': 6.0,
+        'cooldown': 10.0,
+        'level_req': 5,
+        'color': (150, 255, 150),
+        'description': 'Powerful heal for entire party.',
+        'heals_party': True,
+    },
     'regeneration': {
         'name': 'Regeneration',
-        'mana_cost': 15,
-        'heal_amount': 5,  # Per second
-        'duration': 10.0,
-        'range': 6.0,
-        'cooldown': 15.0,
-        'level_req': 3,
+        'mana_cost': 20,
+        'heal_amount': 10,  # Per second
+        'duration': 15.0,
+        'range': 0,
+        'area_radius': 5.0,
+        'cooldown': 12.0,
+        'level_req': 6,
         'color': (100, 200, 100),
-        'description': 'Target regenerates health over time.',
+        'description': 'Party regenerates health over time.',
+        'heals_party': True,
     },
-    'poison_cloud': {
-        'name': 'Poison Cloud',
-        'mana_cost': 18,
-        'damage': 8,  # Per second
-        'duration': 5.0,
-        'range': 5.0,
-        'area_radius': 2.5,
-        'cooldown': 6.0,
-        'level_req': 2,
-        'color': (100, 180, 50),
-        'description': 'Creates a cloud of poison that damages enemies.',
-    },
+    
+    # TIER 4: Late-game - ~30s cooldown
     'summon_wolf': {
         'name': 'Summon Wolf',
-        'mana_cost': 30,
-        'duration': 30.0,
-        'cooldown': 45.0,
+        'mana_cost': 40,
+        'duration': 60.0,
+        'cooldown': 30.0,
         'level_req': 8,
         'color': (150, 140, 120),
-        'description': 'Summons a wolf companion to fight for you.',
+        'description': 'Summons a powerful wolf ally.',
     },
-    'entangle': {
-        'name': 'Entangle',
-        'mana_cost': 12,
-        'duration': 4.0,
-        'range': 5.0,
-        'area_radius': 2.0,
-        'cooldown': 8.0,
-        'level_req': 2,
-        'color': (80, 150, 50),
-        'description': 'Roots enemies in place with vines.',
+    'sanctuary': {
+        'name': 'Sanctuary',
+        'mana_cost': 60,
+        'heal_amount': 100,
+        'range': 0,
+        'area_radius': 8.0,
+        'cooldown': 45.0,
+        'level_req': 12,
+        'color': (255, 255, 200),
+        'description': 'Massive heal and cleanse for entire party.',
+        'heals_party': True,
     },
 }
 
@@ -356,8 +417,9 @@ class MagicSystem:
                     if char.distance_to(target_pos) <= spell.area_radius:
                         targets.append(char)
         else:
-            # Single target
-            entity = world.get_entity_at(target_pos[0], target_pos[1], radius=1.0)
+            # Single target - for damage spells, only target enemies
+            enemies_only = spell.damage > 0
+            entity = world.get_entity_at(target_pos[0], target_pos[1], radius=1.0, enemies_only=enemies_only)
             if entity:
                 targets = [entity]
         

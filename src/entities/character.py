@@ -244,18 +244,23 @@ class Character(Entity):
         if not hasattr(self, 'spellbook'):
             return
         
-        # Spells unlocked at each skill level
+        # Spells unlocked at each skill level (matches magic.py level_req)
+        # Use lists for levels with multiple spells
         COMBAT_MAGIC_SPELLS = {
-            2: 'lightning_bolt',
-            3: 'chain_lightning',
-            5: 'meteor',
+            2: ['lightning_bolt'],
+            3: ['chain_lightning'],
+            5: ['inferno'],
+            6: ['blizzard'],
+            10: ['meteor'],
+            15: ['armageddon'],
         }
         NATURE_MAGIC_SPELLS = {
-            2: 'poison_cloud',
-            3: 'revive',
-            4: 'regeneration',
-            5: 'group_heal',
-            8: 'summon_wolf',
+            2: ['poison_cloud', 'entangle'],
+            3: ['revive'],
+            5: ['group_heal'],
+            6: ['regeneration'],
+            8: ['summon_wolf'],
+            12: ['sanctuary'],
         }
         
         current_level = self.skills.get(skill, 0)
@@ -267,15 +272,16 @@ class Character(Entity):
         else:
             return
         
-        # Check if we just reached a level that unlocks a spell
+        # Check if we just reached a level that unlocks spells
         if current_level in spell_table:
-            spell_id = spell_table[current_level]
-            if spell_id not in self.spellbook.spells:
-                self.spellbook.learn_spell(spell_id)
-                self.pending_level_ups.append({
-                    'skill': f'LEARNED: {spell_id.replace("_", " ").title()}',
-                    'new_level': 0
-                })
+            spell_ids = spell_table[current_level]
+            for spell_id in spell_ids:
+                if spell_id not in self.spellbook.spells:
+                    self.spellbook.learn_spell(spell_id)
+                    self.pending_level_ups.append({
+                        'skill': f'LEARNED: {spell_id.replace("_", " ").title()}',
+                        'new_level': 0
+                    })
     
     def restore_mana(self, amount):
         """Restore mana."""

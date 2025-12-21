@@ -216,15 +216,18 @@ class World:
                             return (nx, ny)
         return None
     
-    def get_entity_at(self, x, y, radius=0.5):
-        """Get entity at a world position."""
-        for char in self.characters:
-            if char.distance_to((x, y)) <= radius:
-                return char
-        
+    def get_entity_at(self, x, y, radius=0.5, enemies_only=False):
+        """Get entity at a world position. Check enemies first for combat targeting."""
+        # Check enemies first - most common use is targeting enemies
         for enemy in self.enemies:
             if enemy.health > 0 and enemy.distance_to((x, y)) <= radius:
                 return enemy
+        
+        # Only check allies if not enemies_only
+        if not enemies_only:
+            for char in self.characters:
+                if char.distance_to((x, y)) <= radius:
+                    return char
         
         return None
     

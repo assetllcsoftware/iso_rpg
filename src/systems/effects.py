@@ -754,6 +754,470 @@ class MeteorEffect(Effect):
             screen.blit(ring_surf, (screen_x - ring_size - 5, screen_y - ring_size - 5))
 
 
+class InfernoEffect(Effect):
+    """Massive fire explosion with multiple rings."""
+    
+    def __init__(self, x, y):
+        super().__init__(x, y, duration=1.5)
+        self.fire_particles = []
+        self.rings = []
+        self.spawn_timer = 0
+    
+    def update(self, dt):
+        super().update(dt)
+        
+        # Spawn fire particles rapidly
+        self.spawn_timer += dt
+        if self.spawn_timer > 0.02 and self.progress < 0.7:
+            self.spawn_timer = 0
+            for _ in range(3):
+                angle = random.uniform(0, math.pi * 2)
+                speed = random.uniform(3, 8)
+                self.fire_particles.append({
+                    'x': self.x + random.uniform(-0.5, 0.5),
+                    'y': self.y + random.uniform(-0.5, 0.5),
+                    'vx': math.cos(angle) * speed,
+                    'vy': math.sin(angle) * speed - 2,
+                    'life': random.uniform(0.4, 0.8),
+                    'size': random.uniform(6, 15),
+                })
+        
+        # Spawn expanding rings
+        if self.elapsed < 0.3 and len(self.rings) < 3:
+            self.rings.append({'radius': 0, 'alpha': 255})
+        
+        for ring in self.rings:
+            ring['radius'] += dt * 4
+            ring['alpha'] = max(0, ring['alpha'] - dt * 200)
+        
+        for p in self.fire_particles:
+            p['x'] += p['vx'] * dt
+            p['y'] += p['vy'] * dt
+            p['life'] -= dt
+        self.fire_particles = [p for p in self.fire_particles if p['life'] > 0]
+        self.rings = [r for r in self.rings if r['alpha'] > 0]
+    
+    def render(self, screen, camera):
+        screen_x, screen_y = camera.world_to_screen(self.x, self.y)
+        
+        # Draw rings
+        for ring in self.rings:
+            ring_size = int(ring['radius'] * 30 * camera.zoom)
+            alpha = int(ring['alpha'])
+            if ring_size > 0:
+                ring_surf = pygame.Surface((ring_size * 2 + 10, ring_size * 2 + 10), pygame.SRCALPHA)
+                pygame.draw.circle(ring_surf, (255, 80, 0, alpha), (ring_size + 5, ring_size + 5), ring_size, 4)
+                screen.blit(ring_surf, (screen_x - ring_size - 5, screen_y - ring_size - 5))
+        
+        # Draw fire particles
+        for p in self.fire_particles:
+            screen_pos = camera.world_to_screen(p['x'], p['y'])
+            size = max(1, int(p['size'] * camera.zoom * (p['life'] / 0.8)))
+            alpha = min(255, int(255 * (p['life'] / 0.8)))
+            fire_surf = pygame.Surface((size * 2, size * 2), pygame.SRCALPHA)
+            pygame.draw.circle(fire_surf, (255, 100 + int(100 * p['life']), 30, alpha), (size, size), size)
+            screen.blit(fire_surf, (screen_pos[0] - size, screen_pos[1] - size))
+
+
+class BlizzardEffect(Effect):
+    """Swirling ice storm with snowflakes."""
+    
+    def __init__(self, x, y):
+        super().__init__(x, y, duration=2.0)
+        self.ice_particles = []
+        self.spawn_timer = 0
+        self.rotation = 0
+    
+    def update(self, dt):
+        super().update(dt)
+        self.rotation += dt * 3
+        
+        # Spawn ice particles
+        self.spawn_timer += dt
+        if self.spawn_timer > 0.03 and self.progress < 0.8:
+            self.spawn_timer = 0
+            angle = self.rotation + random.uniform(-0.5, 0.5)
+            dist = random.uniform(0.5, 2.5)
+            self.ice_particles.append({
+                'angle': angle,
+                'dist': dist,
+                'y_offset': random.uniform(-1, 1),
+                'vy': random.uniform(-1, 1),
+                'life': random.uniform(0.5, 1.0),
+                'size': random.randint(3, 8),
+            })
+        
+        for p in self.ice_particles:
+            p['angle'] += dt * 2
+            p['y_offset'] += p['vy'] * dt
+            p['life'] -= dt
+        self.ice_particles = [p for p in self.ice_particles if p['life'] > 0]
+    
+    def render(self, screen, camera):
+        screen_x, screen_y = camera.world_to_screen(self.x, self.y)
+        
+        # Draw center glow
+        center_size = int(40 * camera.zoom * (1 - self.progress * 0.5))
+        glow_surf = pygame.Surface((center_size * 2, center_size * 2), pygame.SRCALPHA)
+        pygame.draw.circle(glow_surf, (150, 200, 255, 80), (center_size, center_size), center_size)
+        screen.blit(glow_surf, (screen_x - center_size, screen_y - center_size))
+        
+        # Draw ice particles
+        for p in self.ice_particles:
+            px = self.x + math.cos(p['angle']) * p['dist']
+            py = self.y + math.sin(p['angle']) * p['dist'] * 0.5 + p['y_offset']
+            screen_pos = camera.world_to_screen(px, py)
+            size = max(1, int(p['size'] * camera.zoom))
+            alpha = min(255, int(255 * p['life']))
+            pygame.draw.circle(screen, (180, 220, 255), screen_pos, size)
+            pygame.draw.circle(screen, (255, 255, 255), screen_pos, size // 2)
+
+
+class ArmageddonEffect(Effect):
+    """Rain of fire meteors all around."""
+    
+    def __init__(self, x, y):
+        super().__init__(x, y, duration=2.5)
+        self.meteors = []
+        self.spawn_timer = 0
+        self.impacts = []
+    
+    def update(self, dt):
+        super().update(dt)
+        
+        # Spawn meteors
+        self.spawn_timer += dt
+        if self.spawn_timer > 0.15 and self.progress < 0.7:
+            self.spawn_timer = 0
+            angle = random.uniform(0, math.pi * 2)
+            dist = random.uniform(1, 5)
+            target_x = self.x + math.cos(angle) * dist
+            target_y = self.y + math.sin(angle) * dist
+            self.meteors.append({
+                'target_x': target_x,
+                'target_y': target_y,
+                'start_y': target_y - 4,
+                'progress': 0,
+                'size': random.uniform(6, 12),
+            })
+        
+        for m in self.meteors:
+            m['progress'] += dt * 2
+            if m['progress'] >= 1.0 and 'impacted' not in m:
+                m['impacted'] = True
+                self.impacts.append({
+                    'x': m['target_x'],
+                    'y': m['target_y'],
+                    'radius': 0,
+                    'alpha': 255,
+                })
+        self.meteors = [m for m in self.meteors if m['progress'] < 1.0]
+        
+        for i in self.impacts:
+            i['radius'] += dt * 3
+            i['alpha'] = max(0, i['alpha'] - dt * 300)
+        self.impacts = [i for i in self.impacts if i['alpha'] > 0]
+    
+    def render(self, screen, camera):
+        # Draw falling meteors
+        for m in self.meteors:
+            current_y = m['start_y'] + (m['target_y'] - m['start_y']) * m['progress']
+            screen_pos = camera.world_to_screen(m['target_x'], current_y)
+            size = int(m['size'] * camera.zoom)
+            # Fire trail
+            for i in range(3):
+                trail_y = current_y - (i + 1) * 0.3
+                trail_pos = camera.world_to_screen(m['target_x'], trail_y)
+                trail_size = size - i * 2
+                if trail_size > 0:
+                    pygame.draw.circle(screen, (255, 150 - i * 30, 30), trail_pos, trail_size)
+            # Meteor
+            pygame.draw.circle(screen, (100, 60, 40), screen_pos, size)
+        
+        # Draw impacts
+        for i in self.impacts:
+            screen_pos = camera.world_to_screen(i['x'], i['y'])
+            radius = int(i['radius'] * 20 * camera.zoom)
+            alpha = int(i['alpha'])
+            if radius > 0:
+                ring_surf = pygame.Surface((radius * 2 + 10, radius * 2 + 10), pygame.SRCALPHA)
+                pygame.draw.circle(ring_surf, (255, 100, 30, alpha), (radius + 5, radius + 5), radius, 3)
+                screen.blit(ring_surf, (screen_pos[0] - radius - 5, screen_pos[1] - radius - 5))
+
+
+class SanctuaryEffect(Effect):
+    """Golden dome of healing light."""
+    
+    def __init__(self, x, y):
+        super().__init__(x, y, duration=2.0)
+        self.sparkles = []
+        self.dome_alpha = 0
+    
+    def update(self, dt):
+        super().update(dt)
+        
+        # Dome alpha curve
+        if self.progress < 0.2:
+            self.dome_alpha = self.progress / 0.2
+        elif self.progress > 0.8:
+            self.dome_alpha = (1.0 - self.progress) / 0.2
+        else:
+            self.dome_alpha = 1.0
+        
+        # Spawn sparkles
+        if random.random() < 0.3:
+            angle = random.uniform(0, math.pi * 2)
+            dist = random.uniform(1, 4)
+            self.sparkles.append({
+                'x': self.x + math.cos(angle) * dist,
+                'y': self.y + math.sin(angle) * dist * 0.5,
+                'vy': -random.uniform(1, 3),
+                'life': random.uniform(0.5, 1.0),
+                'size': random.randint(2, 5),
+            })
+        
+        for s in self.sparkles:
+            s['y'] += s['vy'] * dt
+            s['life'] -= dt
+        self.sparkles = [s for s in self.sparkles if s['life'] > 0]
+    
+    def render(self, screen, camera):
+        screen_x, screen_y = camera.world_to_screen(self.x, self.y)
+        
+        # Draw dome
+        dome_size = int(80 * camera.zoom)
+        dome_height = int(60 * camera.zoom)
+        alpha = int(100 * self.dome_alpha)
+        dome_surf = pygame.Surface((dome_size * 2, dome_height * 2), pygame.SRCALPHA)
+        pygame.draw.ellipse(dome_surf, (255, 255, 200, alpha), (0, dome_height // 2, dome_size * 2, dome_height))
+        pygame.draw.ellipse(dome_surf, (255, 255, 150, alpha + 50), (0, dome_height // 2, dome_size * 2, dome_height), 3)
+        screen.blit(dome_surf, (screen_x - dome_size, screen_y - dome_height))
+        
+        # Draw sparkles
+        for s in self.sparkles:
+            screen_pos = camera.world_to_screen(s['x'], s['y'])
+            pygame.draw.circle(screen, (255, 255, 200), screen_pos, s['size'])
+
+
+class RegenerationEffect(Effect):
+    """Pulsing green healing waves."""
+    
+    def __init__(self, x, y):
+        super().__init__(x, y, duration=1.5)
+        self.waves = []
+        self.wave_timer = 0
+    
+    def update(self, dt):
+        super().update(dt)
+        
+        # Spawn waves
+        self.wave_timer += dt
+        if self.wave_timer > 0.3 and len(self.waves) < 4:
+            self.wave_timer = 0
+            self.waves.append({'radius': 0, 'alpha': 200})
+        
+        for w in self.waves:
+            w['radius'] += dt * 2
+            w['alpha'] = max(0, w['alpha'] - dt * 100)
+        self.waves = [w for w in self.waves if w['alpha'] > 0]
+    
+    def render(self, screen, camera):
+        screen_x, screen_y = camera.world_to_screen(self.x, self.y)
+        
+        for w in self.waves:
+            radius = int(w['radius'] * 30 * camera.zoom)
+            alpha = int(w['alpha'])
+            if radius > 0:
+                wave_surf = pygame.Surface((radius * 2 + 10, radius * 2 + 10), pygame.SRCALPHA)
+                pygame.draw.circle(wave_surf, (100, 255, 100, alpha), (radius + 5, radius + 5), radius, 3)
+                screen.blit(wave_surf, (screen_x - radius - 5, screen_y - radius - 5))
+        
+        # Center glow
+        glow_size = int(15 * camera.zoom)
+        glow_surf = pygame.Surface((glow_size * 2, glow_size * 2), pygame.SRCALPHA)
+        pygame.draw.circle(glow_surf, (150, 255, 150, 150), (glow_size, glow_size), glow_size)
+        screen.blit(glow_surf, (screen_x - glow_size, screen_y - glow_size))
+
+
+class ReviveEffect(Effect):
+    """Bright upward light beam with sparkles."""
+    
+    def __init__(self, x, y):
+        super().__init__(x, y, duration=1.2)
+        self.sparkles = []
+    
+    def update(self, dt):
+        super().update(dt)
+        
+        # Spawn sparkles rising up
+        if random.random() < 0.5:
+            self.sparkles.append({
+                'x': self.x + random.uniform(-0.5, 0.5),
+                'y': self.y,
+                'vy': -random.uniform(3, 6),
+                'life': random.uniform(0.5, 1.0),
+                'size': random.randint(3, 7),
+            })
+        
+        for s in self.sparkles:
+            s['y'] += s['vy'] * dt
+            s['life'] -= dt
+        self.sparkles = [s for s in self.sparkles if s['life'] > 0]
+    
+    def render(self, screen, camera):
+        screen_x, screen_y = camera.world_to_screen(self.x, self.y)
+        
+        # Light beam
+        beam_width = int(20 * camera.zoom)
+        beam_height = int(80 * camera.zoom)
+        alpha = int(150 * (1 - self.progress))
+        beam_surf = pygame.Surface((beam_width, beam_height), pygame.SRCALPHA)
+        pygame.draw.rect(beam_surf, (255, 255, 200, alpha), (0, 0, beam_width, beam_height))
+        screen.blit(beam_surf, (screen_x - beam_width // 2, screen_y - beam_height))
+        
+        # Sparkles
+        for s in self.sparkles:
+            screen_pos = camera.world_to_screen(s['x'], s['y'])
+            pygame.draw.circle(screen, (255, 255, 220), screen_pos, s['size'])
+
+
+class PoisonCloudEffect(Effect):
+    """Toxic green cloud with skull particles."""
+    
+    def __init__(self, x, y):
+        super().__init__(x, y, duration=2.0)
+        self.puffs = []
+        self.spawn_timer = 0
+    
+    def update(self, dt):
+        super().update(dt)
+        
+        # Spawn cloud puffs
+        self.spawn_timer += dt
+        if self.spawn_timer > 0.1 and self.progress < 0.8:
+            self.spawn_timer = 0
+            angle = random.uniform(0, math.pi * 2)
+            dist = random.uniform(0, 1.5)
+            self.puffs.append({
+                'x': self.x + math.cos(angle) * dist,
+                'y': self.y + math.sin(angle) * dist * 0.5,
+                'size': random.uniform(15, 30),
+                'life': random.uniform(0.8, 1.5),
+                'drift_x': random.uniform(-0.5, 0.5),
+                'drift_y': random.uniform(-0.3, 0.3),
+            })
+        
+        for p in self.puffs:
+            p['x'] += p['drift_x'] * dt
+            p['y'] += p['drift_y'] * dt
+            p['life'] -= dt
+        self.puffs = [p for p in self.puffs if p['life'] > 0]
+    
+    def render(self, screen, camera):
+        for p in self.puffs:
+            screen_pos = camera.world_to_screen(p['x'], p['y'])
+            size = int(p['size'] * camera.zoom * (p['life'] / 1.5))
+            alpha = min(150, int(150 * (p['life'] / 1.5)))
+            if size > 0:
+                puff_surf = pygame.Surface((size * 2, size * 2), pygame.SRCALPHA)
+                pygame.draw.circle(puff_surf, (100, 180, 50, alpha), (size, size), size)
+                screen.blit(puff_surf, (screen_pos[0] - size, screen_pos[1] - size))
+
+
+class EntangleEffect(Effect):
+    """Vines rising from the ground."""
+    
+    def __init__(self, x, y):
+        super().__init__(x, y, duration=1.5)
+        self.vines = []
+        for i in range(6):
+            angle = i * (math.pi / 3)
+            self.vines.append({
+                'angle': angle,
+                'progress': 0,
+                'max_length': random.uniform(1.0, 1.5),
+            })
+    
+    def update(self, dt):
+        super().update(dt)
+        
+        for v in self.vines:
+            if self.progress < 0.5:
+                v['progress'] = min(1.0, v['progress'] + dt * 3)
+            else:
+                v['progress'] = max(0, v['progress'] - dt * 2)
+    
+    def render(self, screen, camera):
+        screen_x, screen_y = camera.world_to_screen(self.x, self.y)
+        
+        for v in self.vines:
+            if v['progress'] > 0:
+                length = v['progress'] * v['max_length']
+                segments = 5
+                prev_pos = (screen_x, screen_y)
+                for s in range(segments):
+                    seg_progress = (s + 1) / segments
+                    angle = v['angle'] + math.sin(seg_progress * math.pi * 2) * 0.3
+                    dist = length * seg_progress
+                    vx = self.x + math.cos(angle) * dist
+                    vy = self.y + math.sin(angle) * dist * 0.5 - seg_progress * 0.5
+                    curr_pos = camera.world_to_screen(vx, vy)
+                    thickness = int((4 - s * 0.5) * camera.zoom)
+                    pygame.draw.line(screen, (80, 160, 60), prev_pos, curr_pos, max(1, thickness))
+                    prev_pos = curr_pos
+
+
+class SummonEffect(Effect):
+    """Magical summoning circle with rising entity."""
+    
+    def __init__(self, x, y, color=(120, 110, 100)):
+        super().__init__(x, y, duration=1.5)
+        self.color = color
+        self.particles = []
+        self.rotation = 0
+    
+    def update(self, dt):
+        super().update(dt)
+        self.rotation += dt * 4
+        
+        # Spawn particles rising
+        if random.random() < 0.4 and self.progress < 0.8:
+            angle = random.uniform(0, math.pi * 2)
+            self.particles.append({
+                'x': self.x + math.cos(angle) * 1.0,
+                'y': self.y + math.sin(angle) * 0.5,
+                'vy': -random.uniform(2, 4),
+                'life': random.uniform(0.5, 1.0),
+            })
+        
+        for p in self.particles:
+            p['y'] += p['vy'] * dt
+            p['life'] -= dt
+        self.particles = [p for p in self.particles if p['life'] > 0]
+    
+    def render(self, screen, camera):
+        screen_x, screen_y = camera.world_to_screen(self.x, self.y)
+        
+        # Summoning circle
+        circle_size = int(50 * camera.zoom)
+        for i in range(3):
+            offset = i * (math.pi * 2 / 3)
+            angle = self.rotation + offset
+            cx = screen_x + int(math.cos(angle) * circle_size * 0.7)
+            cy = screen_y + int(math.sin(angle) * circle_size * 0.35)
+            pygame.draw.circle(screen, self.color, (cx, cy), int(8 * camera.zoom))
+        
+        # Outer ring
+        pygame.draw.ellipse(screen, self.color, 
+                           (screen_x - circle_size, screen_y - circle_size // 2,
+                            circle_size * 2, circle_size), 2)
+        
+        # Rising particles
+        for p in self.particles:
+            screen_pos = camera.world_to_screen(p['x'], p['y'])
+            pygame.draw.circle(screen, self.color, screen_pos, 4)
+
+
 class EffectsManager:
     """Manages all active visual effects."""
     
@@ -821,10 +1285,39 @@ class EffectsManager:
             effect.damage_target = damage_target
             effect.caster = caster
             self.effects.append(effect)
+        elif spell_name == 'inferno':
+            # Big fiery explosion
+            effect = InfernoEffect(target_x, target_y)
+            self.effects.append(effect)
+        elif spell_name == 'blizzard':
+            # Swirling ice storm
+            effect = BlizzardEffect(target_x, target_y)
+            self.effects.append(effect)
+        elif spell_name == 'armageddon':
+            # Rain of fire around caster
+            effect = ArmageddonEffect(start_x, start_y)
+            self.effects.append(effect)
         elif spell_name in ('heal', 'group_heal'):
             self.effects.append(HealEffect(target_x, target_y))
+        elif spell_name == 'sanctuary':
+            # Golden dome heal
+            effect = SanctuaryEffect(target_x, target_y)
+            self.effects.append(effect)
+        elif spell_name == 'regeneration':
+            # Pulsing green aura
+            effect = RegenerationEffect(target_x, target_y)
+            self.effects.append(effect)
         elif spell_name == 'revive':
-            self.effects.append(HealEffect(target_x, target_y))  # Same visual for now
+            self.effects.append(ReviveEffect(target_x, target_y))
+        elif spell_name == 'poison_cloud':
+            effect = PoisonCloudEffect(target_x, target_y)
+            self.effects.append(effect)
+        elif spell_name == 'entangle':
+            effect = EntangleEffect(target_x, target_y)
+            self.effects.append(effect)
+        elif spell_name == 'summon_wolf':
+            effect = SummonEffect(target_x, target_y, color=(120, 110, 100))
+            self.effects.append(effect)
         else:
             # Generic magic bolt
             bolt = SpellBoltEffect(start_x, start_y, target_x, target_y)
