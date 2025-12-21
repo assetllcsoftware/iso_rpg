@@ -25,6 +25,10 @@ class InventoryUI:
         self.party_index = 0
         self.viewing_character = None
         
+        # Cross-party transfer
+        self.drag_source_char = None  # Character the dragged item came from
+        self.transfer_target = None  # Party index being hovered for transfer
+        
         # Fonts
         pygame.font.init()
         self.font = pygame.font.Font(None, 24)
@@ -129,6 +133,9 @@ class InventoryUI:
         
         elif event.type == pygame.MOUSEMOTION:
             self._update_hover(event.pos, char)
+            # Update transfer target highlight when dragging
+            if self.dragging_item and self.party:
+                self._update_transfer_target(event.pos)
             if self.dragging_item:
                 return True
         
@@ -181,6 +188,7 @@ class InventoryUI:
                 if item:
                     self.dragging_item = item
                     self.drag_source = slot_name
+                    self.drag_source_char = character  # Track source character
                 return True
         
         # Check inventory slots
@@ -189,6 +197,7 @@ class InventoryUI:
                 if i < len(character.inventory):
                     self.dragging_item = character.inventory[i]
                     self.drag_source = ('inventory', i)
+                    self.drag_source_char = character  # Track source character
                 return True
         
         return False
@@ -200,8 +209,23 @@ class InventoryUI:
         
         item = self.dragging_item
         source = self.drag_source
+        source_char = self.drag_source_char or character
         
-        # Check if dropping on equipment slot
+        # Check if dropping on a different party member's tab (transfer)
+        if self.party and len(self.party) > 1:
+            tab_y = 20
+            for i, member in enumerate(self.party):
+                tab_rect = pygame.Rect(60 + i * 110, tab_y, 100, 30)
+                if tab_rect.collidepoint(pos) and member != source_char:
+                    # Transfer item to this party member
+                    self._do_transfer(source_char, member, item, source)
+                    self.dragging_item = None
+                    self.drag_source = None
+                    self.drag_source_char = None
+                    self.transfer_target = None
+                    return True
+        
+        # Check if dropping on equipment slot (same character)
         for slot_name, rect in self.equip_slots.items():
             if rect.collidepoint(pos):
                 if hasattr(item, 'slot') and item.slot == slot_name:
@@ -209,7 +233,7 @@ class InventoryUI:
                     self._do_equip(character, item, slot_name, source)
                     break
         
-        # Check if dropping on inventory
+        # Check if dropping on inventory (same character)
         for i, rect in enumerate(self.inv_slots):
             if rect.collidepoint(pos):
                 self._do_inventory_swap(character, item, i, source)
@@ -217,7 +241,25 @@ class InventoryUI:
         
         self.dragging_item = None
         self.drag_source = None
+        self.drag_source_char = None
+        self.transfer_target = None
         return True
+    
+    def _do_transfer(self, from_char, to_char, item, source):
+        """Transfer an item from one party member to another."""
+        # Remove from source character
+        if isinstance(source, tuple) and source[0] == 'inventory':
+            source_idx = source[1]
+            if source_idx < len(from_char.inventory):
+                from_char.inventory[source_idx] = None
+                # Clean up None entries
+                while from_char.inventory and from_char.inventory[-1] is None:
+                    from_char.inventory.pop()
+        elif source in self.equip_slots:
+            from_char.equipment[source] = None
+        
+        # Add to target character's inventory
+        to_char.inventory.append(item)
     
     def _do_equip(self, character, item, slot_name, source):
         """Equip an item."""
@@ -277,6 +319,19 @@ class InventoryUI:
                 self.hover_item = character.inventory[i]
                 return
     
+    def _update_transfer_target(self, pos):
+        """Update which party member tab is being hovered for transfer."""
+        self.transfer_target = None
+        if not self.party or not self.drag_source_char:
+            return
+        
+        tab_y = 20
+        for i, member in enumerate(self.party):
+            tab_rect = pygame.Rect(60 + i * 110, tab_y, 100, 30)
+            if tab_rect.collidepoint(pos) and member != self.drag_source_char:
+                self.transfer_target = i
+                return
+    
     def render(self, character):
         """Render inventory UI."""
         if not self.visible:
@@ -315,8 +370,12 @@ class InventoryUI:
         for i, member in enumerate(self.party):
             tab_rect = pygame.Rect(60 + i * 110, tab_y, 100, 30)
             
+            # Highlight transfer target (green glow when dragging item over)
+            if self.dragging_item and self.transfer_target == i:
+                pygame.draw.rect(self.screen, (60, 120, 80), tab_rect)
+                pygame.draw.rect(self.screen, (100, 200, 120), tab_rect, 3)
             # Highlight selected
-            if i == self.party_index:
+            elif i == self.party_index:
                 pygame.draw.rect(self.screen, (80, 70, 100), tab_rect)
                 pygame.draw.rect(self.screen, COLOR_UI_ACCENT, tab_rect, 2)
             else:
@@ -327,8 +386,11 @@ class InventoryUI:
             name = self.font.render(member.name[:12], True, COLOR_TEXT)
             self.screen.blit(name, (tab_rect.x + 8, tab_rect.y + 6))
         
-        # TAB hint
-        hint = self.font_small.render("TAB to switch", True, COLOR_TEXT_DIM)
+        # Hint text
+        if self.dragging_item:
+            hint = self.font_small.render("Drop on tab to transfer", True, (100, 200, 120))
+        else:
+            hint = self.font_small.render("TAB to switch", True, COLOR_TEXT_DIM)
         self.screen.blit(hint, (60 + len(self.party) * 110 + 15, tab_y + 8))
     
     def _render_character_panel(self, char):

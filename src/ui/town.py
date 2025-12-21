@@ -21,32 +21,120 @@ class Merchant:
     
     def generate_stock(self, player_level):
         """Generate items appropriate for player level."""
+        import random
+        from ..entities.item import (
+            RARITY_COMMON, RARITY_UNCOMMON, RARITY_RARE
+        )
+        
         self.stock = []
         
-        # Always have potions
-        for _ in range(5):
+        # Always have potions (scaled quantity)
+        num_health = 3 + player_level // 2
+        num_mana = 2 + player_level // 3
+        for _ in range(num_health):
             potion = create_potion('health', level=max(1, player_level))
             if potion:
                 self.stock.append(potion)
-        for _ in range(3):
+        for _ in range(num_mana):
             potion = create_potion('mana', level=max(1, player_level))
             if potion:
                 self.stock.append(potion)
         
-        # Weapons appropriate for level
-        weapon_types = ['short_sword', 'long_sword', 'axe', 'mace', 'staff', 'bow']
-        for wtype in weapon_types[:3 + player_level // 5]:
-            weapon = create_weapon(wtype, level=player_level)
+        # Determine rarities available based on level
+        # Low level: mostly common, High level: uncommon/rare available
+        def pick_rarity():
+            roll = random.random()
+            if player_level >= 10 and roll < 0.1:
+                return RARITY_RARE
+            elif player_level >= 5 and roll < 0.3:
+                return RARITY_UNCOMMON
+            elif player_level >= 3 and roll < 0.2:
+                return RARITY_UNCOMMON
+            return RARITY_COMMON
+        
+        # WEAPONS - All main types, quantity scales with level
+        weapon_types = [
+            'short_sword', 'longsword', 'battle_axe', 'mace', 'dagger',
+            'short_bow', 'longbow', 'crossbow', 'staff', 'wand'
+        ]
+        # Unlock more weapon types at higher levels
+        available_weapons = weapon_types[:min(len(weapon_types), 4 + player_level // 2)]
+        num_weapons = min(8, 3 + player_level // 3)
+        
+        for _ in range(num_weapons):
+            wtype = random.choice(available_weapons)
+            rarity = pick_rarity()
+            weapon = create_weapon(wtype, rarity=rarity, level=player_level)
             if weapon:
                 self.stock.append(weapon)
         
-        # Armor
-        armor_types = ['leather_helm', 'leather_chest', 'leather_gloves', 'leather_boots',
-                      'chain_helm', 'chain_chest', 'plate_helm', 'plate_chest']
-        for atype in armor_types[:4 + player_level // 3]:
-            armor = create_armor(atype, level=player_level)
-            if armor:
-                self.stock.append(armor)
+        # SHIELDS (off_hand) 
+        shield_types = ['buckler', 'kite_shield', 'tower_shield']
+        available_shields = shield_types[:min(len(shield_types), 1 + player_level // 4)]
+        for stype in available_shields:
+            rarity = pick_rarity()
+            shield = create_armor(stype, rarity=rarity, level=player_level)
+            if shield:
+                self.stock.append(shield)
+        
+        # ARMOR - All slots
+        # Head
+        helm_types = ['leather_cap', 'chain_coif', 'plate_helm']
+        available_helms = helm_types[:min(len(helm_types), 1 + player_level // 4)]
+        for htype in available_helms:
+            rarity = pick_rarity()
+            helm = create_armor(htype, rarity=rarity, level=player_level)
+            if helm:
+                self.stock.append(helm)
+        
+        # Chest
+        chest_types = ['leather_armor', 'chain_mail', 'plate_armor']
+        available_chests = chest_types[:min(len(chest_types), 1 + player_level // 4)]
+        for ctype in available_chests:
+            rarity = pick_rarity()
+            chest = create_armor(ctype, rarity=rarity, level=player_level)
+            if chest:
+                self.stock.append(chest)
+        
+        # Hands
+        glove_types = ['leather_gloves', 'chain_gloves', 'plate_gauntlets']
+        available_gloves = glove_types[:min(len(glove_types), 1 + player_level // 5)]
+        for gtype in available_gloves:
+            rarity = pick_rarity()
+            gloves = create_armor(gtype, rarity=rarity, level=player_level)
+            if gloves:
+                self.stock.append(gloves)
+        
+        # Feet
+        boot_types = ['leather_boots', 'chain_boots', 'plate_boots']
+        available_boots = boot_types[:min(len(boot_types), 1 + player_level // 5)]
+        for btype in available_boots:
+            rarity = pick_rarity()
+            boots = create_armor(btype, rarity=rarity, level=player_level)
+            if boots:
+                self.stock.append(boots)
+        
+        # Legs
+        leg_types = ['leather_pants', 'chain_leggings', 'plate_greaves']
+        available_legs = leg_types[:min(len(leg_types), 1 + player_level // 5)]
+        for ltype in available_legs:
+            rarity = pick_rarity()
+            legs = create_armor(ltype, rarity=rarity, level=player_level)
+            if legs:
+                self.stock.append(legs)
+        
+        # Accessories at higher levels
+        if player_level >= 5:
+            # Ring
+            ring = create_armor('ring', rarity=pick_rarity(), level=player_level)
+            if ring:
+                self.stock.append(ring)
+        
+        if player_level >= 8:
+            # Amulet
+            amulet = create_armor('amulet', rarity=pick_rarity(), level=player_level)
+            if amulet:
+                self.stock.append(amulet)
     
     def get_sell_price(self, item):
         """Get price trader will pay for item."""

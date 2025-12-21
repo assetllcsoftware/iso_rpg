@@ -132,6 +132,10 @@ ARMOR_TEMPLATES = {
     'buckler': {'slot': SLOT_OFF_HAND, 'armor': 3, 'weight': 3},
     'kite_shield': {'slot': SLOT_OFF_HAND, 'armor': 6, 'weight': 6},
     'tower_shield': {'slot': SLOT_OFF_HAND, 'armor': 10, 'weight': 12},
+    
+    # Accessories
+    'ring': {'slot': SLOT_RING_1, 'armor': 0, 'weight': 0.1},
+    'amulet': {'slot': SLOT_AMULET, 'armor': 0, 'weight': 0.2},
 }
 
 PREFIXES = {

@@ -8,8 +8,9 @@ import pygame
 import math
 
 # Sprite sizes
-CHAR_SIZE = 48  # Characters are 48x48 (increased for detail)
-ITEM_SIZE = 24  # Items are 24x24
+CHAR_SIZE = 32  # Standard characters are 32x32
+HERO_SIZE = 48  # Hero and mage are 48x48 (larger, more detailed)
+ITEM_SIZE = 16  # Items are 16x16
 TILE_SIZE = 32  # Tiles are 32x32
 
 # Color palettes
@@ -165,7 +166,7 @@ class PixelSpriteGenerator:
     
     def hero_idle(self, frame=0):
         """Hero idle animation - Indian warrior with crown, shield, and flaming sword."""
-        surf = self._create_surface()
+        surf = self._create_surface(HERO_SIZE)
         
         # Animation offset (subtle breathing)
         y_off = 1 if frame % 2 == 0 else 0
@@ -311,88 +312,225 @@ class PixelSpriteGenerator:
     
     def hero_walk(self, frame=0, direction=0):
         """Hero walk animation - Indian warrior. direction: 0=down, 1=left, 2=right, 3=up"""
-        surf = self._create_surface()
+        surf = self._create_surface(HERO_SIZE)
         
         # Leg animation
         leg_offsets = [(0, 0), (3, -1), (0, 0), (-3, -1)]
         l_off, r_off = leg_offsets[frame % 4], leg_offsets[(frame + 2) % 4]
-        
-        # Body bob
         y_off = 1 if frame % 2 == 0 else 0
         flame_flicker = frame % 3
-        
-        # === CAPE (flowing behind) ===
         cape_flow = frame % 4
+        arm_swing = [0, 3, 0, -3][frame % 4]
+        
+        if direction == 0:  # DOWN - facing camera
+            self._draw_hero_walk_down(surf, y_off, l_off, r_off, cape_flow, arm_swing, flame_flicker)
+        elif direction == 1:  # LEFT - facing left
+            self._draw_hero_walk_left(surf, y_off, l_off, r_off, cape_flow, arm_swing, flame_flicker)
+        elif direction == 2:  # RIGHT - facing right
+            self._draw_hero_walk_right(surf, y_off, l_off, r_off, cape_flow, arm_swing, flame_flicker)
+        else:  # UP - facing away
+            self._draw_hero_walk_up(surf, y_off, l_off, r_off, cape_flow, arm_swing, flame_flicker)
+        
+        return surf
+    
+    def _draw_hero_walk_down(self, surf, y_off, l_off, r_off, cape_flow, arm_swing, flame_flicker):
+        """Hero walking towards camera (down)."""
+        # Cape behind
         self._draw_rect(surf, 8 - cape_flow, 24 + y_off, 6, 16 + cape_flow, PALETTE['hero_red'])
         self._draw_rect(surf, 34 + cape_flow // 2, 24 + y_off, 6, 16 + cape_flow, PALETTE['hero_red'])
         
-        # === LEGS ===
-        # White dhoti
+        # Legs
         self._draw_rect(surf, 17 + l_off[0], 34 + y_off + l_off[1], 6, 10, PALETTE['hero_white'])
         self._draw_rect(surf, 25 + r_off[0], 34 + y_off + r_off[1], 6, 10, PALETTE['hero_white'])
-        # Gold shin guards
         self._draw_rect(surf, 17 + l_off[0], 38 + y_off + l_off[1], 6, 6, PALETTE['hero_gold'])
         self._draw_rect(surf, 25 + r_off[0], 38 + y_off + r_off[1], 6, 6, PALETTE['hero_gold'])
-        # Feet
         self._draw_rect(surf, 16 + l_off[0], 44 + y_off, 7, 3, PALETTE['hero_armor_dark'])
         self._draw_rect(surf, 25 + r_off[0], 44 + y_off, 7, 3, PALETTE['hero_armor_dark'])
         
-        # === BODY/TORSO ===
+        # Body
         self._draw_rect(surf, 15, 22 + y_off, 18, 12, PALETTE['hero_armor'])
         self._draw_rect(surf, 16, 23 + y_off, 16, 10, PALETTE['hero_armor_light'])
         self._draw_rect(surf, 15, 22 + y_off, 18, 2, PALETTE['hero_gold'])
         self._draw_rect(surf, 22, 24 + y_off, 4, 8, PALETTE['hero_gold'])
-        # Red sash
         self._draw_rect(surf, 14, 28 + y_off, 20, 4, PALETTE['hero_red'])
-        # Gold belt
         self._draw_rect(surf, 15, 32 + y_off, 18, 3, PALETTE['hero_gold'])
-        self._draw_rect(surf, 22, 32 + y_off, 4, 3, PALETTE['hero_red'])
         
-        # === SHOULDERS ===
+        # Shoulders & Arms
         self._draw_rect(surf, 10, 20 + y_off, 7, 6, PALETTE['hero_gold'])
         self._draw_rect(surf, 31, 20 + y_off, 7, 6, PALETTE['hero_gold'])
-        
-        # === ARMS (swinging) ===
-        arm_swing = [0, 3, 0, -3][frame % 4]
         self._draw_rect(surf, 8, 26 + y_off - arm_swing, 5, 10, PALETTE['hero_armor'])
         self._draw_rect(surf, 35, 26 + y_off + arm_swing, 5, 10, PALETTE['hero_armor'])
-        # Hands
         self._draw_rect(surf, 7, 35 + y_off - arm_swing, 5, 4, PALETTE['skin_light'])
         self._draw_rect(surf, 36, 35 + y_off + arm_swing, 5, 4, PALETTE['skin_light'])
         
-        # === SHIELD (bouncing with walk) ===
+        # Shield (left)
         self._draw_rect(surf, 2, 24 + y_off - arm_swing, 12, 16, PALETTE['hero_armor_dark'])
         self._draw_rect(surf, 3, 25 + y_off - arm_swing, 10, 14, PALETTE['hero_armor'])
         self._draw_outline_rect(surf, 2, 24 + y_off - arm_swing, 12, 16, PALETTE['hero_gold'])
         self._draw_rect(surf, 6, 29 + y_off - arm_swing, 4, 4, PALETTE['hero_gold'])
         
-        # === HEAD ===
+        # Head with face
         self._draw_rect(surf, 18, 10 + y_off, 12, 12, PALETTE['skin_light'])
         self._draw_rect(surf, 19, 11 + y_off, 10, 10, PALETTE['skin_mid'])
-        self._draw_rect(surf, 20, 14 + y_off, 3, 2, (40, 30, 20))
+        self._draw_rect(surf, 20, 14 + y_off, 3, 2, (40, 30, 20))  # Eyes
         self._draw_rect(surf, 25, 14 + y_off, 3, 2, (40, 30, 20))
         
-        # === CROWN ===
+        # Crown
         self._draw_rect(surf, 16, 6 + y_off, 16, 6, PALETTE['hero_gold'])
-        self._draw_rect(surf, 17, 7 + y_off, 14, 4, PALETTE['hero_gold_light'])
         self._draw_rect(surf, 22, 1 + y_off, 4, 6, PALETTE['hero_gold'])
         self._draw_rect(surf, 23, 2 + y_off, 2, 2, PALETTE['hero_red'])
-        # Red plume
         self._draw_rect(surf, 30 + cape_flow // 2, 2 + y_off, 8, 4, PALETTE['hero_red'])
         
-        # === FLAMING SWORD ===
+        # Flaming Sword (right)
         self._draw_rect(surf, 40, 8 + y_off + arm_swing + flame_flicker, 3, 22, PALETTE['hero_gold'])
-        self._draw_rect(surf, 41, 10 + y_off + arm_swing + flame_flicker, 1, 18, PALETTE['hero_gold_light'])
         self._draw_rect(surf, 38, 30 + y_off + arm_swing, 7, 3, PALETTE['hero_gold_dark'])
-        # Flames
         self._draw_rect(surf, 38 + flame_flicker, 4 + y_off + arm_swing, 3, 5, PALETTE['fire'])
         self._draw_rect(surf, 42 - flame_flicker, 3 + y_off + arm_swing, 2, 4, PALETTE['fire_light'])
+    
+    def _draw_hero_walk_left(self, surf, y_off, l_off, r_off, cape_flow, arm_swing, flame_flicker):
+        """Hero walking left - side view with shield forward."""
+        # Cape flowing right (behind)
+        self._draw_rect(surf, 30 + cape_flow, 22 + y_off, 10 + cape_flow, 20, PALETTE['hero_red'])
+        self._draw_rect(surf, 32 + cape_flow, 24 + y_off, 8 + cape_flow, 16, PALETTE['hero_red_dark'])
         
-        return surf
+        # Legs (side view - one in front of other)
+        self._draw_rect(surf, 20 + r_off[0], 34 + y_off + r_off[1], 8, 10, PALETTE['hero_white'])  # Back leg
+        self._draw_rect(surf, 20 + r_off[0], 38 + y_off + r_off[1], 8, 6, PALETTE['hero_gold'])
+        self._draw_rect(surf, 18 + l_off[0], 34 + y_off + l_off[1], 8, 10, PALETTE['hero_white'])  # Front leg
+        self._draw_rect(surf, 18 + l_off[0], 38 + y_off + l_off[1], 8, 6, PALETTE['hero_gold'])
+        self._draw_rect(surf, 17 + l_off[0], 44 + y_off, 10, 3, PALETTE['hero_armor_dark'])
+        
+        # Body (side view - narrower)
+        self._draw_rect(surf, 18, 22 + y_off, 12, 12, PALETTE['hero_armor'])
+        self._draw_rect(surf, 19, 23 + y_off, 10, 10, PALETTE['hero_armor_light'])
+        self._draw_rect(surf, 18, 22 + y_off, 12, 2, PALETTE['hero_gold'])
+        self._draw_rect(surf, 17, 28 + y_off, 14, 4, PALETTE['hero_red'])
+        self._draw_rect(surf, 18, 32 + y_off, 12, 3, PALETTE['hero_gold'])
+        
+        # Shoulder
+        self._draw_rect(surf, 16, 20 + y_off, 10, 5, PALETTE['hero_gold'])
+        
+        # Arm with shield (front - prominent)
+        self._draw_rect(surf, 8, 24 + y_off, 12, 18, PALETTE['hero_armor_dark'])  # Shield
+        self._draw_rect(surf, 9, 25 + y_off, 10, 16, PALETTE['hero_armor'])
+        self._draw_outline_rect(surf, 8, 24 + y_off, 12, 18, PALETTE['hero_gold'])
+        self._draw_rect(surf, 12, 30 + y_off, 4, 4, PALETTE['hero_gold'])  # Sun emblem
+        self._draw_rect(surf, 13, 31 + y_off, 2, 2, PALETTE['hero_saffron'])
+        
+        # Head (side profile)
+        self._draw_rect(surf, 18, 10 + y_off, 10, 12, PALETTE['skin_light'])
+        self._draw_rect(surf, 19, 11 + y_off, 8, 10, PALETTE['skin_mid'])
+        self._draw_rect(surf, 18, 14 + y_off, 2, 2, (40, 30, 20))  # Eye
+        self._draw_rect(surf, 16, 16 + y_off, 3, 2, PALETTE['skin_shadow'])  # Nose
+        
+        # Crown (side)
+        self._draw_rect(surf, 17, 6 + y_off, 12, 6, PALETTE['hero_gold'])
+        self._draw_rect(surf, 21, 1 + y_off, 4, 6, PALETTE['hero_gold'])
+        self._draw_rect(surf, 22, 2 + y_off, 2, 2, PALETTE['hero_red'])
+        
+        # Sword (behind/right - less visible)
+        self._draw_rect(surf, 28, 12 + y_off + arm_swing, 3, 20, PALETTE['hero_gold'])
+        self._draw_rect(surf, 27 + flame_flicker, 8 + y_off + arm_swing, 2, 4, PALETTE['fire'])
+    
+    def _draw_hero_walk_right(self, surf, y_off, l_off, r_off, cape_flow, arm_swing, flame_flicker):
+        """Hero walking right - side view with sword forward."""
+        # Cape flowing left (behind)
+        self._draw_rect(surf, 4 - cape_flow, 22 + y_off, 10 + cape_flow, 20, PALETTE['hero_red'])
+        self._draw_rect(surf, 6 - cape_flow, 24 + y_off, 8 + cape_flow, 16, PALETTE['hero_red_dark'])
+        
+        # Legs (side view)
+        self._draw_rect(surf, 20 + l_off[0], 34 + y_off + l_off[1], 8, 10, PALETTE['hero_white'])
+        self._draw_rect(surf, 20 + l_off[0], 38 + y_off + l_off[1], 8, 6, PALETTE['hero_gold'])
+        self._draw_rect(surf, 22 + r_off[0], 34 + y_off + r_off[1], 8, 10, PALETTE['hero_white'])
+        self._draw_rect(surf, 22 + r_off[0], 38 + y_off + r_off[1], 8, 6, PALETTE['hero_gold'])
+        self._draw_rect(surf, 21 + r_off[0], 44 + y_off, 10, 3, PALETTE['hero_armor_dark'])
+        
+        # Body (side view)
+        self._draw_rect(surf, 18, 22 + y_off, 12, 12, PALETTE['hero_armor'])
+        self._draw_rect(surf, 19, 23 + y_off, 10, 10, PALETTE['hero_armor_light'])
+        self._draw_rect(surf, 18, 22 + y_off, 12, 2, PALETTE['hero_gold'])
+        self._draw_rect(surf, 17, 28 + y_off, 14, 4, PALETTE['hero_red'])
+        self._draw_rect(surf, 18, 32 + y_off, 12, 3, PALETTE['hero_gold'])
+        
+        # Shoulder
+        self._draw_rect(surf, 22, 20 + y_off, 10, 5, PALETTE['hero_gold'])
+        
+        # Shield (behind/left - less visible)
+        self._draw_rect(surf, 12, 26 + y_off, 8, 12, PALETTE['hero_armor_dark'])
+        self._draw_outline_rect(surf, 12, 26 + y_off, 8, 12, PALETTE['hero_gold'])
+        
+        # Head (side profile - facing right)
+        self._draw_rect(surf, 20, 10 + y_off, 10, 12, PALETTE['skin_light'])
+        self._draw_rect(surf, 21, 11 + y_off, 8, 10, PALETTE['skin_mid'])
+        self._draw_rect(surf, 28, 14 + y_off, 2, 2, (40, 30, 20))  # Eye
+        self._draw_rect(surf, 29, 16 + y_off, 3, 2, PALETTE['skin_shadow'])  # Nose
+        
+        # Crown (side)
+        self._draw_rect(surf, 19, 6 + y_off, 12, 6, PALETTE['hero_gold'])
+        self._draw_rect(surf, 23, 1 + y_off, 4, 6, PALETTE['hero_gold'])
+        self._draw_rect(surf, 24, 2 + y_off, 2, 2, PALETTE['hero_red'])
+        self._draw_rect(surf, 28, 4 + y_off, 6, 3, PALETTE['hero_red'])  # Plume
+        
+        # Flaming Sword (front - prominent)
+        self._draw_rect(surf, 34, 8 + y_off + arm_swing + flame_flicker, 4, 26, PALETTE['hero_gold'])
+        self._draw_rect(surf, 35, 10 + y_off + arm_swing + flame_flicker, 2, 22, PALETTE['hero_gold_light'])
+        self._draw_rect(surf, 32, 32 + y_off + arm_swing, 8, 3, PALETTE['hero_gold_dark'])
+        self._draw_rect(surf, 32 + flame_flicker, 4 + y_off + arm_swing, 4, 6, PALETTE['fire'])
+        self._draw_rect(surf, 36 - flame_flicker, 2 + y_off + arm_swing, 3, 5, PALETTE['fire_light'])
+        self._draw_rect(surf, 34, 0 + y_off + arm_swing + flame_flicker, 2, 4, PALETTE['fire'])
+    
+    def _draw_hero_walk_up(self, surf, y_off, l_off, r_off, cape_flow, arm_swing, flame_flicker):
+        """Hero walking away from camera (up) - back view."""
+        # Cape prominent (front in this view)
+        self._draw_rect(surf, 12, 18 + y_off, 24, 26 + cape_flow, PALETTE['hero_red'])
+        self._draw_rect(surf, 14, 20 + y_off, 20, 22 + cape_flow, PALETTE['hero_red_dark'])
+        # Cape gold trim
+        self._draw_rect(surf, 12, 18 + y_off, 2, 26 + cape_flow, PALETTE['hero_gold'])
+        self._draw_rect(surf, 34, 18 + y_off, 2, 26 + cape_flow, PALETTE['hero_gold'])
+        
+        # Legs (back view)
+        self._draw_rect(surf, 17 + l_off[0], 34 + y_off + l_off[1], 6, 10, PALETTE['hero_white'])
+        self._draw_rect(surf, 25 + r_off[0], 34 + y_off + r_off[1], 6, 10, PALETTE['hero_white'])
+        self._draw_rect(surf, 17 + l_off[0], 38 + y_off + l_off[1], 6, 6, PALETTE['hero_gold'])
+        self._draw_rect(surf, 25 + r_off[0], 38 + y_off + r_off[1], 6, 6, PALETTE['hero_gold'])
+        self._draw_rect(surf, 16 + l_off[0], 44 + y_off, 7, 3, PALETTE['hero_armor_dark'])
+        self._draw_rect(surf, 25 + r_off[0], 44 + y_off, 7, 3, PALETTE['hero_armor_dark'])
+        
+        # Body (back)
+        self._draw_rect(surf, 15, 22 + y_off, 18, 12, PALETTE['hero_armor'])
+        self._draw_rect(surf, 16, 23 + y_off, 16, 10, PALETTE['hero_armor_dark'])
+        self._draw_rect(surf, 15, 32 + y_off, 18, 3, PALETTE['hero_gold'])
+        
+        # Shoulders
+        self._draw_rect(surf, 10, 20 + y_off, 7, 6, PALETTE['hero_gold'])
+        self._draw_rect(surf, 31, 20 + y_off, 7, 6, PALETTE['hero_gold'])
+        
+        # Arms
+        self._draw_rect(surf, 8, 26 + y_off - arm_swing, 5, 10, PALETTE['hero_armor'])
+        self._draw_rect(surf, 35, 26 + y_off + arm_swing, 5, 10, PALETTE['hero_armor'])
+        
+        # Shield (back of left arm)
+        self._draw_rect(surf, 4, 24 + y_off - arm_swing, 10, 14, PALETTE['hero_armor_dark'])
+        self._draw_outline_rect(surf, 4, 24 + y_off - arm_swing, 10, 14, PALETTE['hero_gold'])
+        
+        # Head (back of head)
+        self._draw_rect(surf, 18, 10 + y_off, 12, 12, PALETTE['skin_shadow'])
+        
+        # Crown (back)
+        self._draw_rect(surf, 16, 6 + y_off, 16, 6, PALETTE['hero_gold'])
+        self._draw_rect(surf, 17, 7 + y_off, 14, 4, PALETTE['hero_gold_dark'])
+        self._draw_rect(surf, 22, 1 + y_off, 4, 6, PALETTE['hero_gold'])
+        # Plume prominent from back
+        self._draw_rect(surf, 28, 0 + y_off, 10, 6, PALETTE['hero_red'])
+        self._draw_rect(surf, 30, 2 + y_off, 8, 4, PALETTE['hero_red_light'])
+        
+        # Sword (back of right arm)
+        self._draw_rect(surf, 38, 10 + y_off + arm_swing, 3, 20, PALETTE['hero_gold'])
+        self._draw_rect(surf, 37 + flame_flicker, 6 + y_off + arm_swing, 2, 4, PALETTE['fire'])
     
     def hero_attack(self, frame=0):
         """Hero flaming sword attack animation - Indian warrior."""
-        surf = self._create_surface()
+        surf = self._create_surface(HERO_SIZE)
         
         # Attack phases: wind up, swing, follow through
         phases = [
@@ -476,7 +614,7 @@ class PixelSpriteGenerator:
     
     def hero_cast(self, frame=0):
         """Hero spell casting animation - Indian warrior channeling magic."""
-        surf = self._create_surface()
+        surf = self._create_surface(HERO_SIZE)
         
         # Casting pose - arms raised
         arm_raise = min(frame * 3, 10)
@@ -542,7 +680,7 @@ class PixelSpriteGenerator:
     
     def hero_death(self, frame=0):
         """Hero death/falling animation - Indian warrior falls."""
-        surf = self._create_surface()
+        surf = self._create_surface(HERO_SIZE)
         
         # Fall angle increases with frame
         fall_angle = min(frame * 22, 90)
@@ -591,7 +729,7 @@ class PixelSpriteGenerator:
     
     def mage_idle(self, frame=0):
         """Mage/Lyra idle animation - Indian mystic with peacock headdress and crystal staff."""
-        surf = self._create_surface()
+        surf = self._create_surface(HERO_SIZE)
         
         y_off = 1 if frame % 2 == 0 else 0
         magic_pulse = frame % 3
@@ -756,7 +894,7 @@ class PixelSpriteGenerator:
     
     def mage_cast(self, frame=0):
         """Mage casting animation - Indian mystic channeling blue magic."""
-        surf = self._create_surface()
+        surf = self._create_surface(HERO_SIZE)
         
         cast_raise = min(frame * 3, 10)
         magic_grow = min(frame * 3, 12)
@@ -853,61 +991,70 @@ class PixelSpriteGenerator:
         return surf
     
     def mage_walk(self, frame=0, direction=0):
-        """Mage walk animation - Indian mystic walking."""
-        surf = self._create_surface()
+        """Mage walk animation - Indian mystic. direction: 0=down, 1=left, 2=right, 3=up"""
+        surf = self._create_surface(HERO_SIZE)
         
-        # Leg animation
         leg_offsets = [(0, 0), (3, -1), (0, 0), (-3, -1)]
         l_off, r_off = leg_offsets[frame % 4], leg_offsets[(frame + 2) % 4]
         y_off = 1 if frame % 2 == 0 else 0
         cape_flow = frame % 4
+        arm_swing = [0, 3, 0, -3][frame % 4]
+        bounce = 1 if frame % 2 == 0 else 0
         
-        # === CAPE (flowing) ===
+        if direction == 0:  # DOWN
+            self._draw_mage_walk_down(surf, y_off, l_off, r_off, cape_flow, arm_swing, bounce)
+        elif direction == 1:  # LEFT
+            self._draw_mage_walk_left(surf, y_off, l_off, r_off, cape_flow, arm_swing, bounce)
+        elif direction == 2:  # RIGHT
+            self._draw_mage_walk_right(surf, y_off, l_off, r_off, cape_flow, arm_swing, bounce)
+        else:  # UP
+            self._draw_mage_walk_up(surf, y_off, l_off, r_off, cape_flow, arm_swing, bounce)
+        
+        return surf
+    
+    def _draw_mage_walk_down(self, surf, y_off, l_off, r_off, cape_flow, arm_swing, bounce):
+        """Mage walking towards camera (down)."""
+        # Cape
         self._draw_rect(surf, 4 - cape_flow, 26 + y_off, 8, 18 + cape_flow, PALETTE['mage_robe'])
         self._draw_rect(surf, 36 + cape_flow // 2, 26 + y_off, 8, 18 + cape_flow, PALETTE['mage_robe'])
         self._draw_rect(surf, 4 - cape_flow, 26 + y_off, 2, 18 + cape_flow, PALETTE['mage_gold'])
         self._draw_rect(surf, 42 + cape_flow // 2, 26 + y_off, 2, 18 + cape_flow, PALETTE['mage_gold'])
         
-        # === LEGS ===
+        # Legs
         self._draw_rect(surf, 17 + l_off[0], 36 + y_off + l_off[1], 6, 8, PALETTE['hero_white'])
         self._draw_rect(surf, 25 + r_off[0], 36 + y_off + r_off[1], 6, 8, PALETTE['hero_white'])
         self._draw_rect(surf, 16 + l_off[0], 42 + y_off, 7, 5, PALETTE['mage_gold'])
         self._draw_rect(surf, 25 + r_off[0], 42 + y_off, 7, 5, PALETTE['mage_gold'])
         
-        # === ROBE BODY ===
+        # Robe
         self._draw_rect(surf, 14, 24 + y_off, 20, 14, PALETTE['mage_robe'])
         self._draw_rect(surf, 15, 25 + y_off, 18, 12, PALETTE['mage_robe_light'])
         self._draw_rect(surf, 22, 24 + y_off, 4, 14, PALETTE['mage_gold'])
         self._draw_rect(surf, 14, 32 + y_off, 20, 3, PALETTE['mage_gold'])
         self._draw_rect(surf, 22, 32 + y_off, 4, 3, PALETTE['mage_blue_gem'])
         
-        # === SHOULDERS ===
+        # Shoulders & Arms
         self._draw_rect(surf, 10, 22 + y_off, 8, 5, PALETTE['mage_robe'])
         self._draw_rect(surf, 30, 22 + y_off, 8, 5, PALETTE['mage_robe'])
         self._draw_rect(surf, 10, 22 + y_off, 8, 2, PALETTE['mage_gold'])
         self._draw_rect(surf, 30, 22 + y_off, 8, 2, PALETTE['mage_gold'])
-        
-        # === ARMS (swinging) ===
-        arm_swing = [0, 3, 0, -3][frame % 4]
         self._draw_rect(surf, 8, 26 + y_off - arm_swing, 5, 10, PALETTE['mage_robe'])
         self._draw_rect(surf, 35, 26 + y_off + arm_swing, 5, 10, PALETTE['mage_robe'])
-        self._draw_rect(surf, 8, 34 + y_off - arm_swing, 5, 2, PALETTE['mage_gold'])
-        self._draw_rect(surf, 35, 34 + y_off + arm_swing, 5, 2, PALETTE['mage_gold'])
         self._draw_rect(surf, 7, 36 + y_off - arm_swing, 6, 4, PALETTE['skin_light'])
         self._draw_rect(surf, 36, 36 + y_off + arm_swing, 5, 4, PALETTE['skin_light'])
         
-        # === BOOK (bouncing with walk) ===
+        # Book (left)
         self._draw_rect(surf, 2, 32 + y_off - arm_swing, 10, 8, (100, 70, 50))
         self._draw_rect(surf, 2, 32 + y_off - arm_swing, 2, 2, PALETTE['mage_gold'])
         self._draw_rect(surf, 10, 32 + y_off - arm_swing, 2, 2, PALETTE['mage_gold'])
         
-        # === STAFF (bobbing with walk) ===
+        # Staff (right)
         self._draw_rect(surf, 40, 10 + y_off + arm_swing, 3, 32, PALETTE['wood_dark'])
         self._draw_rect(surf, 39, 20 + y_off + arm_swing, 5, 3, PALETTE['mage_gold'])
         self._draw_rect(surf, 38, 4 + y_off + arm_swing, 7, 8, PALETTE['mage_blue_gem'])
         self._draw_rect(surf, 39, 5 + y_off + arm_swing, 5, 6, PALETTE['mage_blue_glow'])
         
-        # === HEAD ===
+        # Head with face
         self._draw_rect(surf, 18, 12 + y_off, 12, 10, PALETTE['skin_light'])
         self._draw_rect(surf, 19, 13 + y_off, 10, 8, PALETTE['skin_mid'])
         self._draw_rect(surf, 20, 15 + y_off, 3, 3, (255, 255, 255))
@@ -915,28 +1062,199 @@ class PixelSpriteGenerator:
         self._draw_rect(surf, 21, 16 + y_off, 2, 2, (50, 150, 180))
         self._draw_rect(surf, 26, 16 + y_off, 2, 2, (50, 150, 180))
         
-        # === HAIR ===
+        # Hair
         self._draw_rect(surf, 17, 10 + y_off, 14, 5, PALETTE['mage_hair'])
         self._draw_rect(surf, 15, 14 + y_off, 4, 10, PALETTE['mage_hair'])
         self._draw_rect(surf, 29, 14 + y_off, 4, 10, PALETTE['mage_hair'])
         
-        # === HEADDRESS ===
+        # Headdress
         self._draw_rect(surf, 16, 6 + y_off, 16, 6, PALETTE['mage_robe'])
         self._draw_rect(surf, 16, 10 + y_off, 16, 3, PALETTE['mage_gold'])
         self._draw_rect(surf, 22, 7 + y_off, 4, 4, PALETTE['mage_blue_gem'])
         
-        # === PEACOCK FEATHERS (bouncing) ===
-        bounce = 1 if frame % 2 == 0 else 0
+        # Peacock feathers
         self._draw_rect(surf, 30, 2 + y_off - bounce, 2, 8, (80, 60, 50))
         self._draw_rect(surf, 33, 1 + y_off - bounce, 2, 7, (80, 60, 50))
         self._draw_rect(surf, 29, 0 + y_off - bounce, 4, 4, PALETTE['peacock_blue'])
         self._draw_rect(surf, 32, 0 + y_off - bounce, 4, 4, PALETTE['peacock_green'])
+    
+    def _draw_mage_walk_left(self, surf, y_off, l_off, r_off, cape_flow, arm_swing, bounce):
+        """Mage walking left - book forward, staff behind."""
+        # Cape flowing right
+        self._draw_rect(surf, 30 + cape_flow, 22 + y_off, 12 + cape_flow, 22, PALETTE['mage_robe'])
+        self._draw_rect(surf, 32 + cape_flow, 24 + y_off, 10 + cape_flow, 18, PALETTE['mage_robe_dark'])
+        self._draw_rect(surf, 40 + cape_flow, 22 + y_off, 2, 22, PALETTE['mage_gold'])
         
-        return surf
+        # Legs (side)
+        self._draw_rect(surf, 20 + r_off[0], 36 + y_off + r_off[1], 8, 8, PALETTE['hero_white'])
+        self._draw_rect(surf, 18 + l_off[0], 36 + y_off + l_off[1], 8, 8, PALETTE['hero_white'])
+        self._draw_rect(surf, 18, 42 + y_off, 10, 5, PALETTE['mage_gold'])
+        
+        # Robe (side)
+        self._draw_rect(surf, 18, 24 + y_off, 12, 14, PALETTE['mage_robe'])
+        self._draw_rect(surf, 19, 25 + y_off, 10, 12, PALETTE['mage_robe_light'])
+        self._draw_rect(surf, 17, 32 + y_off, 14, 3, PALETTE['mage_gold'])
+        
+        # Shoulder
+        self._draw_rect(surf, 16, 22 + y_off, 10, 4, PALETTE['mage_robe'])
+        self._draw_rect(surf, 16, 22 + y_off, 10, 2, PALETTE['mage_gold'])
+        
+        # Staff arm (behind)
+        self._draw_rect(surf, 26, 24 + y_off + arm_swing, 4, 14, PALETTE['mage_robe'])
+        self._draw_rect(surf, 28, 10 + y_off + arm_swing, 3, 30, PALETTE['wood_dark'])
+        self._draw_rect(surf, 26, 4 + y_off + arm_swing, 7, 8, PALETTE['mage_blue_gem'])
+        self._draw_rect(surf, 27, 5 + y_off + arm_swing, 5, 6, PALETTE['mage_blue_glow'])
+        
+        # Book arm (front - prominent)
+        self._draw_rect(surf, 10, 26 + y_off - arm_swing, 6, 12, PALETTE['mage_robe'])
+        self._draw_rect(surf, 4, 30 + y_off - arm_swing, 12, 10, (100, 70, 50))  # Book
+        self._draw_rect(surf, 5, 31 + y_off - arm_swing, 10, 8, (80, 55, 40))
+        self._draw_rect(surf, 4, 30 + y_off - arm_swing, 2, 2, PALETTE['mage_gold'])
+        self._draw_rect(surf, 14, 30 + y_off - arm_swing, 2, 2, PALETTE['mage_gold'])
+        self._draw_rect(surf, 7, 33 + y_off - arm_swing, 4, 3, PALETTE['mage_blue_glow'])  # Magic glow
+        
+        # Head (side)
+        self._draw_rect(surf, 18, 12 + y_off, 10, 10, PALETTE['skin_light'])
+        self._draw_rect(surf, 16, 15 + y_off, 3, 2, (50, 150, 180))  # Eye
+        self._draw_rect(surf, 14, 17 + y_off, 3, 2, PALETTE['skin_shadow'])  # Nose
+        
+        # Hair (side)
+        self._draw_rect(surf, 17, 10 + y_off, 12, 5, PALETTE['mage_hair'])
+        self._draw_rect(surf, 26, 12 + y_off, 4, 12, PALETTE['mage_hair'])
+        
+        # Headdress (side)
+        self._draw_rect(surf, 16, 6 + y_off, 14, 6, PALETTE['mage_robe'])
+        self._draw_rect(surf, 16, 10 + y_off, 14, 3, PALETTE['mage_gold'])
+        self._draw_rect(surf, 20, 7 + y_off, 4, 4, PALETTE['mage_blue_gem'])
+        
+        # Peacock feathers
+        self._draw_rect(surf, 28, 2 + y_off - bounce, 2, 6, (80, 60, 50))
+        self._draw_rect(surf, 27, 0 + y_off - bounce, 4, 4, PALETTE['peacock_blue'])
+        self._draw_rect(surf, 30, 1 + y_off - bounce, 3, 3, PALETTE['peacock_green'])
+    
+    def _draw_mage_walk_right(self, surf, y_off, l_off, r_off, cape_flow, arm_swing, bounce):
+        """Mage walking right - staff forward, book behind."""
+        # Cape flowing left
+        self._draw_rect(surf, 4 - cape_flow, 22 + y_off, 12 + cape_flow, 22, PALETTE['mage_robe'])
+        self._draw_rect(surf, 6 - cape_flow, 24 + y_off, 10 + cape_flow, 18, PALETTE['mage_robe_dark'])
+        self._draw_rect(surf, 4 - cape_flow, 22 + y_off, 2, 22, PALETTE['mage_gold'])
+        
+        # Legs (side)
+        self._draw_rect(surf, 20 + l_off[0], 36 + y_off + l_off[1], 8, 8, PALETTE['hero_white'])
+        self._draw_rect(surf, 22 + r_off[0], 36 + y_off + r_off[1], 8, 8, PALETTE['hero_white'])
+        self._draw_rect(surf, 20, 42 + y_off, 10, 5, PALETTE['mage_gold'])
+        
+        # Robe (side)
+        self._draw_rect(surf, 18, 24 + y_off, 12, 14, PALETTE['mage_robe'])
+        self._draw_rect(surf, 19, 25 + y_off, 10, 12, PALETTE['mage_robe_light'])
+        self._draw_rect(surf, 17, 32 + y_off, 14, 3, PALETTE['mage_gold'])
+        
+        # Shoulder
+        self._draw_rect(surf, 22, 22 + y_off, 10, 4, PALETTE['mage_robe'])
+        self._draw_rect(surf, 22, 22 + y_off, 10, 2, PALETTE['mage_gold'])
+        
+        # Book arm (behind)
+        self._draw_rect(surf, 14, 26 + y_off - arm_swing, 5, 12, PALETTE['mage_robe'])
+        self._draw_rect(surf, 12, 32 + y_off - arm_swing, 8, 6, (100, 70, 50))
+        
+        # Staff arm (front - prominent)
+        self._draw_rect(surf, 32, 24 + y_off + arm_swing, 6, 14, PALETTE['mage_robe'])
+        self._draw_rect(surf, 36, 6 + y_off + arm_swing, 4, 36, PALETTE['wood_dark'])
+        self._draw_rect(surf, 37, 8 + y_off + arm_swing, 2, 32, PALETTE['wood'])
+        self._draw_rect(surf, 34, 18 + y_off + arm_swing, 6, 3, PALETTE['mage_gold'])
+        self._draw_rect(surf, 33, 0 + y_off + arm_swing, 9, 10, PALETTE['mage_blue_gem'])
+        self._draw_rect(surf, 34, 1 + y_off + arm_swing, 7, 8, PALETTE['mage_blue_glow'])
+        self._draw_rect(surf, 35, 2 + y_off + arm_swing, 5, 6, (200, 230, 255))
+        
+        # Head (side - facing right)
+        self._draw_rect(surf, 20, 12 + y_off, 10, 10, PALETTE['skin_light'])
+        self._draw_rect(surf, 28, 15 + y_off, 3, 2, (50, 150, 180))  # Eye
+        self._draw_rect(surf, 30, 17 + y_off, 3, 2, PALETTE['skin_shadow'])  # Nose
+        
+        # Hair
+        self._draw_rect(surf, 19, 10 + y_off, 12, 5, PALETTE['mage_hair'])
+        self._draw_rect(surf, 18, 12 + y_off, 4, 12, PALETTE['mage_hair'])
+        
+        # Headdress
+        self._draw_rect(surf, 18, 6 + y_off, 14, 6, PALETTE['mage_robe'])
+        self._draw_rect(surf, 18, 10 + y_off, 14, 3, PALETTE['mage_gold'])
+        self._draw_rect(surf, 24, 7 + y_off, 4, 4, PALETTE['mage_blue_gem'])
+        
+        # Peacock feathers (prominent this side)
+        self._draw_rect(surf, 30, 2 + y_off - bounce, 2, 8, (80, 60, 50))
+        self._draw_rect(surf, 33, 1 + y_off - bounce, 2, 7, (80, 60, 50))
+        self._draw_rect(surf, 36, 3 + y_off - bounce, 2, 6, (80, 60, 50))
+        self._draw_rect(surf, 29, 0 + y_off - bounce, 4, 4, PALETTE['peacock_blue'])
+        self._draw_rect(surf, 32, 0 + y_off - bounce, 4, 4, PALETTE['peacock_green'])
+        self._draw_rect(surf, 35, 1 + y_off - bounce, 4, 4, PALETTE['peacock_blue'])
+    
+    def _draw_mage_walk_up(self, surf, y_off, l_off, r_off, cape_flow, arm_swing, bounce):
+        """Mage walking away (up) - back view, cape prominent."""
+        # Cape (front in back view - prominent)
+        self._draw_rect(surf, 10, 18 + y_off, 28, 28 + cape_flow, PALETTE['mage_robe'])
+        self._draw_rect(surf, 12, 20 + y_off, 24, 24 + cape_flow, PALETTE['mage_robe_dark'])
+        self._draw_rect(surf, 10, 18 + y_off, 2, 28 + cape_flow, PALETTE['mage_gold'])
+        self._draw_rect(surf, 36, 18 + y_off, 2, 28 + cape_flow, PALETTE['mage_gold'])
+        # Gold embroidery on cape
+        self._draw_rect(surf, 20, 28 + y_off, 8, 6, PALETTE['mage_gold_dark'])
+        self._draw_rect(surf, 21, 29 + y_off, 6, 4, PALETTE['mage_blue_gem'])
+        
+        # Legs (back)
+        self._draw_rect(surf, 17 + l_off[0], 36 + y_off + l_off[1], 6, 8, PALETTE['hero_white'])
+        self._draw_rect(surf, 25 + r_off[0], 36 + y_off + r_off[1], 6, 8, PALETTE['hero_white'])
+        self._draw_rect(surf, 16 + l_off[0], 42 + y_off, 7, 5, PALETTE['mage_gold'])
+        self._draw_rect(surf, 25 + r_off[0], 42 + y_off, 7, 5, PALETTE['mage_gold'])
+        
+        # Robe (back)
+        self._draw_rect(surf, 14, 24 + y_off, 20, 14, PALETTE['mage_robe'])
+        self._draw_rect(surf, 15, 25 + y_off, 18, 12, PALETTE['mage_robe_dark'])
+        self._draw_rect(surf, 14, 32 + y_off, 20, 3, PALETTE['mage_gold'])
+        
+        # Shoulders
+        self._draw_rect(surf, 10, 22 + y_off, 8, 5, PALETTE['mage_robe'])
+        self._draw_rect(surf, 30, 22 + y_off, 8, 5, PALETTE['mage_robe'])
+        self._draw_rect(surf, 10, 22 + y_off, 8, 2, PALETTE['mage_gold'])
+        self._draw_rect(surf, 30, 22 + y_off, 8, 2, PALETTE['mage_gold'])
+        
+        # Arms
+        self._draw_rect(surf, 8, 26 + y_off - arm_swing, 5, 10, PALETTE['mage_robe'])
+        self._draw_rect(surf, 35, 26 + y_off + arm_swing, 5, 10, PALETTE['mage_robe'])
+        
+        # Book (back of left arm)
+        self._draw_rect(surf, 4, 30 + y_off - arm_swing, 8, 6, (100, 70, 50))
+        
+        # Staff (back of right arm)
+        self._draw_rect(surf, 38, 12 + y_off + arm_swing, 3, 28, PALETTE['wood_dark'])
+        self._draw_rect(surf, 36, 6 + y_off + arm_swing, 7, 8, PALETTE['mage_blue_gem'])
+        
+        # Head (back of head)
+        self._draw_rect(surf, 18, 12 + y_off, 12, 10, PALETTE['skin_shadow'])
+        
+        # Hair (back - more visible)
+        self._draw_rect(surf, 16, 10 + y_off, 16, 6, PALETTE['mage_hair'])
+        self._draw_rect(surf, 14, 14 + y_off, 5, 12, PALETTE['mage_hair'])
+        self._draw_rect(surf, 29, 14 + y_off, 5, 12, PALETTE['mage_hair'])
+        self._draw_rect(surf, 17, 12 + y_off, 14, 4, PALETTE['mage_hair_dark'])
+        
+        # Headdress (back)
+        self._draw_rect(surf, 16, 6 + y_off, 16, 6, PALETTE['mage_robe'])
+        self._draw_rect(surf, 17, 7 + y_off, 14, 4, PALETTE['mage_robe_dark'])
+        self._draw_rect(surf, 16, 10 + y_off, 16, 3, PALETTE['mage_gold'])
+        
+        # Peacock feathers (very prominent from back)
+        self._draw_rect(surf, 28, 0 + y_off - bounce, 2, 10, (80, 60, 50))
+        self._draw_rect(surf, 32, 0 + y_off - bounce, 2, 9, (80, 60, 50))
+        self._draw_rect(surf, 36, 1 + y_off - bounce, 2, 8, (80, 60, 50))
+        self._draw_rect(surf, 26, 0 + y_off - bounce, 5, 5, PALETTE['peacock_blue'])
+        self._draw_rect(surf, 27, 1 + y_off - bounce, 3, 3, PALETTE['peacock_green'])
+        self._draw_rect(surf, 30, 0 + y_off - bounce, 5, 5, PALETTE['peacock_green'])
+        self._draw_rect(surf, 31, 1 + y_off - bounce, 3, 3, PALETTE['peacock_blue'])
+        self._draw_rect(surf, 34, 0 + y_off - bounce, 5, 5, PALETTE['peacock_blue'])
+        self._draw_rect(surf, 35, 1 + y_off - bounce, 3, 3, PALETTE['mage_gold'])
     
     def mage_attack(self, frame=0):
         """Mage staff attack animation."""
-        surf = self._create_surface()
+        surf = self._create_surface(HERO_SIZE)
         
         # Attack phases - staff swing
         phases = [
@@ -1015,7 +1333,7 @@ class PixelSpriteGenerator:
     
     def mage_death(self, frame=0):
         """Mage death animation."""
-        surf = self._create_surface()
+        surf = self._create_surface(HERO_SIZE)
         
         fall_angle = min(frame * 22, 90)
         
