@@ -1,0 +1,478 @@
+# Loot Table Definitions
+# What enemies drop and weighted item tables
+
+# =============================================================================
+# ENEMY LOOT TABLES
+# =============================================================================
+
+skeleton_loot:
+  gold:
+    min: 3
+    max: 10
+  drops:
+    - { item: health_potion_minor, chance: 0.35 }
+    - { item: bone, chance: 0.40 }
+    - { table: weapons_common, chance: 0.25 }
+    - { table: armor_common, chance: 0.20 }
+    - { table: weapons_uncommon, chance: 0.08 }
+    - { table: armor_uncommon, chance: 0.05 }
+
+spider_loot:
+  gold:
+    min: 4
+    max: 12
+  drops:
+    - { item: health_potion_minor, chance: 0.40 }
+    - { item: spider_silk, chance: 0.35 }
+    - { item: poison_gland, chance: 0.20 }
+    - { table: weapons_common, chance: 0.20 }
+    - { table: armor_common, chance: 0.15 }
+    - { table: weapons_uncommon, chance: 0.06 }
+
+zombie_loot:
+  gold:
+    min: 8
+    max: 20
+  drops:
+    - { item: health_potion, chance: 0.25 }
+    - { item: rotting_flesh, chance: 0.30 }
+    - { table: weapons_uncommon, chance: 0.20 }
+    - { table: armor_uncommon, chance: 0.18 }
+    - { table: weapons_rare, chance: 0.08 }
+    - { table: armor_rare, chance: 0.05 }
+    - { table: accessories_common, chance: 0.10 }
+
+orc_loot:
+  gold:
+    min: 15
+    max: 35
+  drops:
+    - { item: health_potion, chance: 0.30 }
+    - { item: mana_potion, chance: 0.20 }
+    - { table: weapons_uncommon, chance: 0.25 }
+    - { table: armor_uncommon, chance: 0.20 }
+    - { table: weapons_rare, chance: 0.15 }
+    - { table: armor_rare, chance: 0.12 }
+    - { table: weapons_epic, chance: 0.04 }
+    - { table: accessories_uncommon, chance: 0.10 }
+
+troll_loot:
+  gold:
+    min: 25
+    max: 60
+  drops:
+    - { item: health_potion_greater, chance: 0.35 }
+    - { table: weapons_rare, chance: 0.25 }
+    - { table: armor_rare, chance: 0.22 }
+    - { table: weapons_epic, chance: 0.12 }
+    - { table: armor_epic, chance: 0.10 }
+    - { table: accessories_rare, chance: 0.08 }
+
+demon_loot:
+  gold:
+    min: 40
+    max: 100
+  drops:
+    - { item: health_potion_greater, chance: 0.40 }
+    - { item: mana_potion_greater, chance: 0.35 }
+    - { item: demon_heart, chance: 0.20 }
+    - { table: weapons_epic, chance: 0.25 }
+    - { table: armor_epic, chance: 0.22 }
+    - { table: weapons_legendary, chance: 0.08 }
+    - { table: armor_legendary, chance: 0.06 }
+    - { table: accessories_epic, chance: 0.10 }
+
+dragon_loot:
+  gold:
+    min: 100
+    max: 300
+  drops:
+    - { item: health_potion_supreme, chance: 0.50 }
+    - { item: mana_potion_supreme, chance: 0.45 }
+    - { item: dragon_scale_mat, chance: 0.30 }
+    - { table: weapons_legendary, chance: 0.25 }
+    - { table: armor_legendary, chance: 0.22 }
+    - { table: weapons_mythic, chance: 0.10 }
+    - { table: armor_mythic, chance: 0.08 }
+    - { table: accessories_legendary, chance: 0.15 }
+
+boss_loot:
+  gold:
+    min: 200
+    max: 500
+  drops:
+    - { item: health_potion_supreme, chance: 0.80 }
+    - { item: mana_potion_supreme, chance: 0.75 }
+    - { item: void_essence, chance: 0.15 }
+    - { table: weapons_mythic, chance: 0.30 }
+    - { table: armor_mythic, chance: 0.25 }
+    - { table: weapons_unique, chance: 0.08 }
+    - { table: armor_unique, chance: 0.05 }
+    - { table: accessories_mythic, chance: 0.12 }
+
+# =============================================================================
+# COMMON WEAPONS (Gray - Rarity 0)
+# =============================================================================
+
+weapons_common:
+  items:
+    - { id: rusty_sword, weight: 12 }
+    - { id: short_sword, weight: 10 }
+    - { id: dagger, weight: 10 }
+    - { id: club, weight: 8 }
+    - { id: hatchet, weight: 8 }
+    - { id: sling, weight: 6 }
+    - { id: short_bow, weight: 8 }
+    - { id: hunting_bow, weight: 6 }
+    - { id: throwing_daggers, weight: 5 }
+    - { id: wand, weight: 6 }
+    - { id: apprentice_staff, weight: 5 }
+    - { id: wooden_staff, weight: 5 }
+
+# =============================================================================
+# UNCOMMON WEAPONS (Green - Rarity 1)
+# =============================================================================
+
+weapons_uncommon:
+  items:
+    - { id: longsword, weight: 10 }
+    - { id: mace, weight: 10 }
+    - { id: scimitar, weight: 8 }
+    - { id: war_hammer, weight: 6 }
+    - { id: flanged_mace, weight: 6 }
+    - { id: longbow, weight: 8 }
+    - { id: composite_bow, weight: 6 }
+    - { id: light_crossbow, weight: 5 }
+    - { id: javelin, weight: 7 }
+    - { id: oak_staff, weight: 6 }
+    - { id: iron_wand, weight: 5 }
+    - { id: ember_rod, weight: 5 }
+
+# =============================================================================
+# RARE WEAPONS (Blue - Rarity 2)
+# =============================================================================
+
+weapons_rare:
+  items:
+    - { id: battle_axe, weight: 10 }
+    - { id: claymore, weight: 8 }
+    - { id: assassins_blade, weight: 7 }
+    - { id: morning_star, weight: 6 }
+    - { id: falchion, weight: 8 }
+    - { id: crossbow, weight: 7 }
+    - { id: recurve_bow, weight: 6 }
+    - { id: elven_bow, weight: 5 }
+    - { id: repeating_crossbow, weight: 4 }
+    - { id: crystal_staff, weight: 6 }
+    - { id: fire_staff, weight: 5 }
+    - { id: frost_wand, weight: 5 }
+    - { id: nature_staff, weight: 5 }
+
+# =============================================================================
+# EPIC WEAPONS (Purple - Rarity 3)
+# =============================================================================
+
+weapons_epic:
+  items:
+    - { id: flame_sword, weight: 10 }
+    - { id: frost_blade, weight: 9 }
+    - { id: thunder_maul, weight: 7 }
+    - { id: venomfang, weight: 8 }
+    - { id: executioners_blade, weight: 5 }
+    - { id: phoenix_bow, weight: 7 }
+    - { id: void_crossbow, weight: 5 }
+    - { id: windrunner, weight: 6 }
+    - { id: inferno_staff, weight: 6 }
+    - { id: blizzard_staff, weight: 5 }
+    - { id: lightning_rod, weight: 5 }
+    - { id: life_staff, weight: 4 }
+
+# =============================================================================
+# LEGENDARY WEAPONS (Orange - Rarity 4)
+# =============================================================================
+
+weapons_legendary:
+  items:
+    - { id: sunfire_greatsword, weight: 10 }
+    - { id: shadowbane, weight: 9 }
+    - { id: worldbreaker, weight: 6 }
+    - { id: soulreaver, weight: 8 }
+    - { id: dragonslayer_bow, weight: 7 }
+    - { id: siegebreaker, weight: 5 }
+    - { id: archmage_staff, weight: 6 }
+    - { id: staff_of_elements, weight: 5 }
+
+# =============================================================================
+# MYTHIC WEAPONS (Red - Rarity 5)
+# =============================================================================
+
+weapons_mythic:
+  items:
+    - { id: inferno_cleaver, weight: 10 }
+    - { id: frostmourne_echo, weight: 9 }
+    - { id: bloodthirster, weight: 8 }
+    - { id: artemis_bow, weight: 7 }
+    - { id: armageddon_launcher, weight: 4 }
+    - { id: chaos_orb, weight: 6 }
+    - { id: staff_of_the_void, weight: 5 }
+
+# =============================================================================
+# UNIQUE WEAPONS (Gold - Rarity 6)
+# =============================================================================
+
+weapons_unique:
+  items:
+    - { id: excalibur, weight: 10 }
+    - { id: mjolnir, weight: 8 }
+    - { id: merlins_staff, weight: 7 }
+
+# =============================================================================
+# CELESTIAL WEAPONS (Cyan - Rarity 7)
+# =============================================================================
+
+weapons_celestial:
+  items:
+    - { id: starfall_blade, weight: 10 }
+    - { id: godslayer, weight: 5 }
+    - { id: cosmic_conduit, weight: 7 }
+
+# =============================================================================
+# COMMON ARMOR (Gray - Rarity 0)
+# =============================================================================
+
+armor_common:
+  items:
+    - { id: cloth_hood, weight: 10 }
+    - { id: leather_cap, weight: 10 }
+    - { id: padded_coif, weight: 8 }
+    - { id: cloth_shirt, weight: 10 }
+    - { id: leather_armor, weight: 10 }
+    - { id: padded_vest, weight: 8 }
+    - { id: leather_gloves, weight: 10 }
+    - { id: leather_boots, weight: 10 }
+    - { id: leather_pants, weight: 10 }
+    - { id: buckler, weight: 6 }
+    - { id: wooden_shield, weight: 6 }
+
+# =============================================================================
+# UNCOMMON ARMOR (Green - Rarity 1)
+# =============================================================================
+
+armor_uncommon:
+  items:
+    - { id: iron_helm, weight: 10 }
+    - { id: chain_coif, weight: 10 }
+    - { id: wizard_hat, weight: 6 }
+    - { id: studded_leather, weight: 10 }
+    - { id: mage_robes, weight: 7 }
+    - { id: chain_mail, weight: 10 }
+    - { id: chain_gloves, weight: 8 }
+    - { id: chain_boots, weight: 8 }
+    - { id: chain_leggings, weight: 8 }
+    - { id: iron_shield, weight: 6 }
+    - { id: kite_shield, weight: 5 }
+
+# =============================================================================
+# RARE ARMOR (Blue - Rarity 2)
+# =============================================================================
+
+armor_rare:
+  items:
+    - { id: steel_helm, weight: 10 }
+    - { id: battle_crown, weight: 7 }
+    - { id: arcane_circlet, weight: 6 }
+    - { id: plate_helm, weight: 8 }
+    - { id: scale_mail, weight: 10 }
+    - { id: arcane_robes, weight: 7 }
+    - { id: plate_armor, weight: 8 }
+    - { id: shadow_leather, weight: 6 }
+    - { id: plate_gauntlets, weight: 7 }
+    - { id: plate_boots, weight: 7 }
+    - { id: plate_leggings, weight: 7 }
+    - { id: steel_shield, weight: 6 }
+    - { id: tower_shield, weight: 4 }
+
+# =============================================================================
+# EPIC ARMOR (Purple - Rarity 3)
+# =============================================================================
+
+armor_epic:
+  items:
+    - { id: dragon_helm, weight: 10 }
+    - { id: shadow_hood, weight: 8 }
+    - { id: archmage_crown, weight: 7 }
+    - { id: dragon_scale, weight: 10 }
+    - { id: voidweave_robes, weight: 7 }
+    - { id: assassins_garb, weight: 8 }
+    - { id: dragon_gauntlets, weight: 7 }
+    - { id: boots_of_speed, weight: 6 }
+    - { id: dragon_shield, weight: 5 }
+
+# =============================================================================
+# LEGENDARY ARMOR (Orange - Rarity 4)
+# =============================================================================
+
+armor_legendary:
+  items:
+    - { id: crown_of_thorns, weight: 10 }
+    - { id: titans_visage, weight: 8 }
+    - { id: godplate, weight: 10 }
+    - { id: celestial_robes, weight: 8 }
+    - { id: aegis, weight: 6 }
+
+# =============================================================================
+# MYTHIC ARMOR (Red - Rarity 5)
+# =============================================================================
+
+armor_mythic:
+  items:
+    - { id: primordial_plate, weight: 10 }
+
+# =============================================================================
+# UNIQUE/CELESTIAL ARMOR - Future expansion
+# =============================================================================
+
+armor_unique:
+  items:
+    - { id: godplate, weight: 10, rarity_override: 6 }
+
+# =============================================================================
+# COMMON ACCESSORIES (Gray - Rarity 0)
+# =============================================================================
+
+accessories_common:
+  items:
+    - { id: copper_ring, weight: 10 }
+    - { id: simple_amulet, weight: 10 }
+
+# =============================================================================
+# UNCOMMON ACCESSORIES (Green - Rarity 1)
+# =============================================================================
+
+accessories_uncommon:
+  items:
+    - { id: silver_ring, weight: 10 }
+
+# =============================================================================
+# RARE ACCESSORIES (Blue - Rarity 2)
+# =============================================================================
+
+accessories_rare:
+  items:
+    - { id: ring_of_strength, weight: 10 }
+    - { id: ring_of_intelligence, weight: 10 }
+    - { id: ring_of_dexterity, weight: 10 }
+    - { id: amulet_of_protection, weight: 8 }
+
+# =============================================================================
+# EPIC ACCESSORIES (Purple - Rarity 3)
+# =============================================================================
+
+accessories_epic:
+  items:
+    - { id: ring_of_power, weight: 10 }
+    - { id: amulet_of_fury, weight: 8 }
+    - { id: amulet_of_the_arcane, weight: 8 }
+
+# =============================================================================
+# LEGENDARY ACCESSORIES (Orange - Rarity 4)
+# =============================================================================
+
+accessories_legendary:
+  items:
+    - { id: ring_of_the_ancients, weight: 10 }
+    - { id: heart_of_the_dragon, weight: 8 }
+
+# =============================================================================
+# MYTHIC ACCESSORIES (Red - Rarity 5)
+# =============================================================================
+
+accessories_mythic:
+  items:
+    - { id: ring_of_the_ancients, weight: 10, rarity_override: 5 }
+    - { id: heart_of_the_dragon, weight: 8, rarity_override: 5 }
+
+# =============================================================================
+# POTIONS
+# =============================================================================
+
+potions_basic:
+  items:
+    - { id: health_potion_minor, weight: 10 }
+    - { id: mana_potion_minor, weight: 8 }
+
+potions_standard:
+  items:
+    - { id: health_potion, weight: 10 }
+    - { id: mana_potion, weight: 8 }
+
+potions_greater:
+  items:
+    - { id: health_potion_greater, weight: 10 }
+    - { id: mana_potion_greater, weight: 8 }
+    - { id: elixir_of_power, weight: 4 }
+    - { id: elixir_of_speed, weight: 4 }
+    - { id: elixir_of_fortitude, weight: 4 }
+
+potions_supreme:
+  items:
+    - { id: health_potion_supreme, weight: 10 }
+    - { id: mana_potion_supreme, weight: 8 }
+
+# =============================================================================
+# SPECIAL: CHEST LOOT TABLES
+# =============================================================================
+
+chest_common:
+  gold:
+    min: 10
+    max: 30
+  drops:
+    - { table: weapons_common, chance: 0.40 }
+    - { table: armor_common, chance: 0.40 }
+    - { table: potions_basic, chance: 0.60 }
+    - { table: accessories_common, chance: 0.15 }
+
+chest_uncommon:
+  gold:
+    min: 25
+    max: 75
+  drops:
+    - { table: weapons_uncommon, chance: 0.50 }
+    - { table: armor_uncommon, chance: 0.45 }
+    - { table: weapons_rare, chance: 0.15 }
+    - { table: potions_standard, chance: 0.70 }
+    - { table: accessories_uncommon, chance: 0.20 }
+
+chest_rare:
+  gold:
+    min: 50
+    max: 150
+  drops:
+    - { table: weapons_rare, chance: 0.55 }
+    - { table: armor_rare, chance: 0.50 }
+    - { table: weapons_epic, chance: 0.20 }
+    - { table: potions_greater, chance: 0.80 }
+    - { table: accessories_rare, chance: 0.25 }
+
+chest_epic:
+  gold:
+    min: 100
+    max: 300
+  drops:
+    - { table: weapons_epic, chance: 0.60 }
+    - { table: armor_epic, chance: 0.55 }
+    - { table: weapons_legendary, chance: 0.15 }
+    - { table: potions_greater, chance: 0.90 }
+    - { table: accessories_epic, chance: 0.30 }
+
+chest_legendary:
+  gold:
+    min: 200
+    max: 600
+  drops:
+    - { table: weapons_legendary, chance: 0.65 }
+    - { table: armor_legendary, chance: 0.60 }
+    - { table: weapons_mythic, chance: 0.10 }
+    - { table: potions_supreme, chance: 1.0 }
+    - { table: accessories_legendary, chance: 0.35 }

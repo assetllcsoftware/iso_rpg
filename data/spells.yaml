@@ -1,0 +1,399 @@
+# Spell Definitions
+# Combat Magic, Nature Magic, and Melee Abilities
+
+# =============================================================================
+# MELEE ABILITIES (for Hero/Warrior)
+# =============================================================================
+
+whirlwind:
+  id: whirlwind
+  name: "Whirlwind"
+  school: melee
+  type: aoe
+  targeting: self
+  damage_multiplier: 0.8
+  radius: 3.0
+  mana_cost: 20
+  cooldown: 8.0
+  unlock_level: 1
+  tier: 1
+  animation: spin
+  animation_duration: 1.8
+  hits: 6
+  hit_interval: 0.3
+  icon: skill_whirlwind
+  description: "Spin rapidly, shredding all nearby enemies with 6 rapid strikes."
+
+leap_strike:
+  id: leap_strike
+  name: "Leap Strike"
+  school: melee
+  type: instant
+  targeting: enemy
+  damage_multiplier: 3.0
+  damage_flat: 30
+  mana_cost: 25
+  cooldown: 12.0
+  range: 6.0
+  unlock_level: 1
+  tier: 1
+  animation: leap
+  animation_duration: 1.2
+  effect:
+    type: stun
+    duration: 1.5
+  aoe_on_impact:
+    radius: 2.0
+    damage_multiplier: 0.6
+  icon: skill_leap
+  description: "Soar through the air and crash down with earth-shattering force!"
+
+crushing_blow:
+  id: crushing_blow
+  name: "Crushing Blow"
+  school: melee
+  type: instant
+  targeting: enemy
+  damage_multiplier: 4.0
+  mana_cost: 25
+  cooldown: 8.0
+  range: 2.5
+  unlock_level: 1
+  tier: 2
+  animation: heavy
+  animation_duration: 1.2
+  effect:
+    type: stagger
+    duration: 0.8
+    armor_reduction: 0.3
+    armor_reduction_duration: 4.0
+    knockback: 2.0
+  aoe_on_impact:
+    radius: 1.5
+    damage_multiplier: 0.4
+  icon: skill_heavy
+  description: "A devastating overhead strike that shatters the ground and sends enemies flying."
+
+shield_bash:
+  id: shield_bash
+  name: "Shield Bash"
+  school: melee
+  type: instant
+  targeting: enemy
+  damage_multiplier: 0.5
+  mana_cost: 15
+  cooldown: 10.0
+  range: 2.0
+  unlock_level: 2
+  tier: 2
+  animation: bash
+  animation_duration: 0.8
+  effect:
+    type: stun
+    duration: 2.0
+    knockback: 2.0
+  icon: skill_shield_bash
+  description: "Lunge forward and slam your shield into an enemy, stunning them!"
+
+battle_cry:
+  id: battle_cry
+  name: "Battle Cry"
+  school: melee
+  type: buff
+  targeting: allies
+  effect:
+    type: damage_boost
+    amount: 0.25
+    duration: 10.0
+  radius: 6.0
+  mana_cost: 25
+  cooldown: 30.0
+  unlock_level: 3
+  tier: 3
+  icon: skill_battle_cry
+  description: "Boost damage for all nearby allies."
+
+# =============================================================================
+# COMBAT MAGIC
+# =============================================================================
+
+fireball:
+  id: fireball
+  name: "Fireball"
+  school: combat_magic
+  type: projectile
+  targeting: enemy
+  damage: 25
+  damage_type: fire
+  mana_cost: 15
+  cooldown: 2.0
+  range: 8.0
+  projectile_speed: 12.0
+  unlock_level: 1
+  tier: 1
+  icon: spell_fireball
+  description: "Launches a ball of fire at the target enemy."
+
+ice_shard:
+  id: ice_shard
+  name: "Ice Shard"
+  school: combat_magic
+  type: projectile
+  targeting: enemy
+  damage: 20
+  damage_type: ice
+  mana_cost: 12
+  cooldown: 1.5
+  range: 7.0
+  projectile_speed: 15.0
+  effect:
+    type: slow
+    amount: 0.3
+    duration: 2.0
+  unlock_level: 1
+  tier: 1
+  icon: spell_ice
+  description: "A shard of ice that slows the target."
+
+lightning_bolt:
+  id: lightning_bolt
+  name: "Lightning Bolt"
+  school: combat_magic
+  type: instant
+  targeting: enemy
+  damage: 35
+  damage_type: lightning
+  mana_cost: 20
+  cooldown: 3.0
+  range: 8.0
+  unlock_level: 2
+  tier: 2
+  icon: spell_lightning
+  description: "Strikes the target with lightning."
+
+chain_lightning:
+  id: chain_lightning
+  name: "Chain Lightning"
+  school: combat_magic
+  type: chain
+  targeting: enemy
+  damage: 30
+  damage_type: lightning
+  chain_count: 3
+  chain_range: 4.0
+  chain_damage_falloff: 0.7
+  mana_cost: 35
+  cooldown: 9.0
+  range: 7.0
+  unlock_level: 3
+  tier: 3
+  icon: spell_chain_lightning
+  description: "Lightning that jumps between enemies."
+
+inferno:
+  id: inferno
+  name: "Inferno"
+  school: combat_magic
+  type: aoe
+  targeting: ground
+  damage: 50
+  damage_type: fire
+  radius: 3.0
+  mana_cost: 50
+  cooldown: 27.0
+  range: 8.0
+  unlock_level: 5
+  tier: 4
+  icon: spell_inferno
+  description: "Creates a pillar of fire at the target location."
+
+blizzard:
+  id: blizzard
+  name: "Blizzard"
+  school: combat_magic
+  type: aoe
+  targeting: ground
+  damage: 40
+  damage_type: ice
+  radius: 4.0
+  duration: 3.0
+  ticks: 6
+  effect:
+    type: slow
+    amount: 0.5
+  mana_cost: 60
+  cooldown: 27.0
+  range: 8.0
+  unlock_level: 6
+  tier: 4
+  icon: spell_blizzard
+  description: "A freezing storm that damages and slows enemies."
+
+meteor:
+  id: meteor
+  name: "Meteor"
+  school: combat_magic
+  type: aoe
+  targeting: ground
+  damage: 100
+  damage_type: fire
+  radius: 4.0
+  mana_cost: 80
+  cooldown: 81.0
+  range: 10.0
+  unlock_level: 10
+  tier: 5
+  icon: spell_meteor
+  description: "Calls down a devastating meteor."
+
+armageddon:
+  id: armageddon
+  name: "Armageddon"
+  school: combat_magic
+  type: screen_aoe
+  damage: 150
+  damage_type: fire
+  mana_cost: 120
+  cooldown: 243.0
+  unlock_level: 15
+  tier: 6
+  icon: spell_armageddon
+  description: "Rain fire from the sky on all visible enemies."
+
+# =============================================================================
+# NATURE MAGIC
+# =============================================================================
+
+heal:
+  id: heal
+  name: "Heal"
+  school: nature_magic
+  type: party_heal
+  targeting: allies
+  heal_amount: 40
+  mana_cost: 20
+  cooldown: 3.0
+  radius: 99.0
+  unlock_level: 1
+  tier: 1
+  icon: spell_heal
+  description: "Restores health to all party members."
+
+poison_cloud:
+  id: poison_cloud
+  name: "Poison Cloud"
+  school: nature_magic
+  type: aoe
+  targeting: ground
+  damage: 5
+  damage_type: poison
+  duration: 5.0
+  ticks: 10
+  radius: 3.0
+  mana_cost: 25
+  cooldown: 9.0
+  range: 6.0
+  unlock_level: 2
+  tier: 2
+  icon: spell_poison
+  description: "Creates a cloud of poison gas."
+
+entangle:
+  id: entangle
+  name: "Entangle"
+  school: nature_magic
+  type: aoe
+  targeting: ground
+  effect:
+    type: root
+    duration: 3.0
+  radius: 2.5
+  mana_cost: 30
+  cooldown: 9.0
+  range: 6.0
+  unlock_level: 2
+  tier: 2
+  icon: spell_entangle
+  description: "Roots enemies in place."
+
+revive:
+  id: revive
+  name: "Revive"
+  school: nature_magic
+  type: instant
+  targeting: downed_ally
+  heal_percent: 0.5
+  mana_cost: 50
+  cooldown: 27.0
+  range: 4.0
+  unlock_level: 3
+  tier: 3
+  icon: spell_revive
+  description: "Revives a downed party member."
+
+group_heal:
+  id: group_heal
+  name: "Group Heal"
+  school: nature_magic
+  type: aoe
+  targeting: allies
+  heal_amount: 60
+  radius: 5.0
+  mana_cost: 45
+  cooldown: 27.0
+  unlock_level: 5
+  tier: 4
+  icon: spell_group_heal
+  description: "Heals all nearby allies."
+
+regeneration:
+  id: regeneration
+  name: "Regeneration"
+  school: nature_magic
+  type: buff
+  targeting: ally
+  effect:
+    type: heal_over_time
+    amount: 10
+    duration: 10.0
+  mana_cost: 35
+  cooldown: 27.0
+  range: 6.0
+  unlock_level: 6
+  tier: 4
+  icon: spell_regen
+  description: "Target regenerates health over time."
+
+summon_wolf:
+  id: summon_wolf
+  name: "Summon Wolf"
+  school: nature_magic
+  type: summon
+  targeting: ground
+  summon_id: wolf
+  summon_duration: 30.0
+  mana_cost: 60
+  cooldown: 81.0
+  range: 4.0
+  unlock_level: 8
+  tier: 5
+  icon: spell_summon
+  description: "Summons a spirit wolf to fight for you."
+
+sanctuary:
+  id: sanctuary
+  name: "Sanctuary"
+  school: nature_magic
+  type: aoe
+  targeting: allies
+  effect:
+    type: damage_immunity
+    duration: 5.0
+  radius: 4.0
+  mana_cost: 100
+  cooldown: 243.0
+  unlock_level: 12
+  tier: 6
+  icon: spell_sanctuary
+  description: "All allies become immune to damage briefly."
+

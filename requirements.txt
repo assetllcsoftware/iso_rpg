@@ -1,0 +1,4 @@
+# ML Siege Dependencies
+pygame>=2.5.0
+esper>=3.2
+pyyaml>=6.0

@@ -1,0 +1,226 @@
+# Enemy Definitions
+# All enemy types with stats, behaviors, and scaling
+
+skeleton:
+  id: skeleton
+  name: "Skeleton"
+  type: undead
+  sprite_set: skeleton
+
+  base_stats:
+    health: 400
+    damage: 8
+    armor: 0
+    speed: 2.5
+    attack_range: 1.5
+    attack_speed: 0.8
+
+  behavior:
+    aggro_range: 6.0
+    leash_range: 15.0
+
+  scaling:
+    health_per_level: 20
+    damage_per_level: 3
+    armor_per_level: 1
+
+  loot_table: skeleton_loot
+  xp_value: 15
+  gold_range: [3, 8]
+  spawn_levels: [1, 99]
+
+
+spider:
+  id: spider
+  name: "Giant Spider"
+  type: beast
+  sprite_set: spider
+
+  base_stats:
+    health: 300
+    damage: 10
+    armor: 0
+    speed: 3.5
+    attack_range: 1.2
+    attack_speed: 1.0
+
+  behavior:
+    aggro_range: 8.0
+    leash_range: 12.0
+
+  abilities:
+    - id: poison_bite
+      chance: 0.25
+      damage: 8
+      damage_type: poison
+      duration: 3.0
+
+  scaling:
+    health_per_level: 15
+    damage_per_level: 4
+    armor_per_level: 0
+
+  loot_table: spider_loot
+  xp_value: 20
+  gold_range: [4, 10]
+  spawn_levels: [1, 99]
+
+
+goblin:
+  id: goblin
+  name: "Goblin"
+  type: humanoid
+  sprite_set: goblin
+
+  base_stats:
+    health: 500
+    damage: 10
+    armor: 2
+    speed: 3.8
+    attack_range: 1.3
+    attack_speed: 1.2
+
+  behavior:
+    aggro_range: 7.0
+    leash_range: 14.0
+
+  scaling:
+    health_per_level: 25
+    damage_per_level: 4
+    armor_per_level: 1
+
+  loot_table: skeleton_loot
+  xp_value: 12
+  gold_range: [2, 6]
+  spawn_levels: [1, 99]
+
+
+zombie:
+  id: zombie
+  name: "Zombie"
+  type: undead
+  sprite_set: zombie
+
+  base_stats:
+    health: 600
+    damage: 18
+    armor: 8
+    speed: 2.5
+    attack_range: 1.5
+    attack_speed: 0.7
+
+  behavior:
+    aggro_range: 4.0
+    leash_range: 10.0
+
+  scaling:
+    health_per_level: 30
+    damage_per_level: 5
+    armor_per_level: 3
+
+  loot_table: zombie_loot
+  xp_value: 25
+  gold_range: [5, 15]
+  spawn_levels: [4, 99]
+
+
+orc:
+  id: orc
+  name: "Orc Warrior"
+  type: humanoid
+  sprite_set: orc
+
+  base_stats:
+    health: 1000
+    damage: 25
+    armor: 12
+    speed: 4.0
+    attack_range: 1.8
+    attack_speed: 0.9
+
+  behavior:
+    aggro_range: 7.0
+    leash_range: 20.0
+
+  abilities:
+    - id: charge
+      chance: 0.15
+      damage_mult: 1.5
+
+  scaling:
+    health_per_level: 50
+    damage_per_level: 6
+    armor_per_level: 3
+
+  loot_table: orc_loot
+  xp_value: 40
+  gold_range: [10, 25]
+  spawn_levels: [7, 99]
+
+
+demon:
+  id: demon
+  name: "Demon"
+  type: demon
+  sprite_set: demon
+
+  base_stats:
+    health: 1500
+    damage: 30
+    armor: 18
+    speed: 3.5
+    attack_range: 6.0
+    attack_speed: 1.2
+
+  behavior:
+    aggro_range: 10.0
+    leash_range: 25.0
+
+  abilities:
+    - id: fireball
+      chance: 0.30
+      damage: 40
+      damage_type: fire
+      cooldown: 3.0
+
+  resistances:
+    fire: 0.5
+    holy: -0.5  # Weakness
+
+  scaling:
+    health_per_level: 75
+    damage_per_level: 8
+    armor_per_level: 4
+
+  loot_table: demon_loot
+  xp_value: 80
+  gold_range: [20, 50]
+  spawn_levels: [10, 99]
+
+
+# Summon - allied wolf from nature magic
+wolf:
+  id: wolf
+  name: "Spirit Wolf"
+  type: beast
+  sprite_set: wolf
+  is_summon: true
+
+  base_stats:
+    health: 150
+    damage: 18
+    armor: 5
+    speed: 6.0
+    attack_range: 1.3
+    attack_speed: 1.4
+
+  behavior:
+    aggro_range: 8.0
+    leash_range: 12.0
+    follow_summoner: true
+
+  scaling:
+    health_per_level: 30
+    damage_per_level: 5
+    armor_per_level: 2
+

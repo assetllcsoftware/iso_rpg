@@ -1,0 +1,282 @@
+{
+  "barrel1": {
+    "file": "prop/barrel1.png",
+    "type": "prop",
+    "size": [
+      50,
+      60
+    ]
+  },
+  "chest1": {
+    "file": "prop/chest1.png",
+    "type": "prop",
+    "size": [
+      55,
+      45
+    ]
+  },
+  "crate1": {
+    "file": "prop/crate1.png",
+    "type": "prop",
+    "size": [
+      50,
+      50
+    ]
+  },
+  "cratepile1": {
+    "file": "prop/cratepile1.png",
+    "type": "prop",
+    "size": [
+      120,
+      80
+    ]
+  },
+  "palm1": {
+    "file": "decoration/palm1.png",
+    "type": "decoration",
+    "size": [
+      100,
+      150
+    ]
+  },
+  "palm2": {
+    "file": "decoration/palm2.png",
+    "type": "decoration",
+    "size": [
+      100,
+      150
+    ]
+  },
+  "plant1": {
+    "file": "decoration/plant1.png",
+    "type": "decoration",
+    "size": [
+      50,
+      45
+    ]
+  },
+  "plant2": {
+    "file": "decoration/plant2.png",
+    "type": "decoration",
+    "size": [
+      50,
+      45
+    ]
+  },
+  "pool1": {
+    "file": "decoration/pool1.png",
+    "type": "decoration",
+    "size": [
+      120,
+      80
+    ]
+  },
+  "pool2": {
+    "file": "decoration/pool2.png",
+    "type": "decoration",
+    "size": [
+      120,
+      80
+    ]
+  },
+  "rock1": {
+    "file": "decoration/rock1.png",
+    "type": "decoration",
+    "size": [
+      80,
+      60
+    ]
+  },
+  "rock2": {
+    "file": "decoration/rock2.png",
+    "type": "decoration",
+    "size": [
+      80,
+      60
+    ]
+  },
+  "rock3": {
+    "file": "decoration/rock3.png",
+    "type": "decoration",
+    "size": [
+      80,
+      60
+    ]
+  },
+  "rock4": {
+    "file": "decoration/rock4.png",
+    "type": "decoration",
+    "size": [
+      80,
+      60
+    ]
+  },
+  "rock5": {
+    "file": "decoration/rock5.png",
+    "type": "decoration",
+    "size": [
+      80,
+      60
+    ]
+  },
+  "rug1": {
+    "file": "floor/rug1.png",
+    "type": "floor",
+    "size": [
+      150,
+      100
+    ]
+  },
+  "ruin1": {
+    "file": "decoration/ruin1.png",
+    "type": "decoration",
+    "size": [
+      100,
+      140
+    ]
+  },
+  "ruin2": {
+    "file": "decoration/ruin2.png",
+    "type": "decoration",
+    "size": [
+      100,
+      140
+    ]
+  },
+  "ruin3": {
+    "file": "decoration/ruin3.png",
+    "type": "decoration",
+    "size": [
+      100,
+      140
+    ]
+  },
+  "ruin4": {
+    "file": "decoration/ruin4.png",
+    "type": "decoration",
+    "size": [
+      100,
+      140
+    ]
+  },
+  "ruin5": {
+    "file": "decoration/ruin5.png",
+    "type": "decoration",
+    "size": [
+      100,
+      140
+    ]
+  },
+  "urn1": {
+    "file": "prop/urn1.png",
+    "type": "prop",
+    "size": [
+      40,
+      55
+    ]
+  },
+  "wall1": {
+    "file": "decoration/wall1.png",
+    "type": "decoration",
+    "size": [
+      80,
+      120
+    ]
+  },
+  "wall2": {
+    "file": "decoration/wall2.png",
+    "type": "decoration",
+    "size": [
+      80,
+      120
+    ]
+  },
+  "wall3": {
+    "file": "decoration/wall3.png",
+    "type": "decoration",
+    "size": [
+      80,
+      120
+    ]
+  },
+  "goblin1_away": {
+    "file": "enemy/goblin1_away.png",
+    "type": "enemy",
+    "size": [
+      48,
+      48
+    ]
+  },
+  "goblin1_away_attack": {
+    "file": "enemy/goblin1_away_attack.png",
+    "type": "enemy",
+    "size": [
+      48,
+      48
+    ]
+  },
+  "goblin1_twords": {
+    "file": "enemy/goblin1_twords.png",
+    "type": "enemy",
+    "size": [
+      48,
+      48
+    ]
+  },
+  "goblin1_twords_attack": {
+    "file": "enemy/goblin1_twords_attack.png",
+    "type": "enemy",
+    "size": [
+      48,
+      48
+    ]
+  },
+  "skeleton1_away": {
+    "file": "enemy/skeleton1_away.png",
+    "type": "enemy",
+    "size": [
+      48,
+      48
+    ]
+  },
+  "skeleton1_away_attack": {
+    "file": "enemy/skeleton1_away_attack.png",
+    "type": "enemy",
+    "size": [
+      48,
+      48
+    ]
+  },
+  "skeleton1_twords": {
+    "file": "enemy/skeleton1_twords.png",
+    "type": "enemy",
+    "size": [
+      48,
+      48
+    ]
+  },
+  "skeleton1_twords_attack": {
+    "file": "enemy/skeleton1_twords_attack.png",
+    "type": "enemy",
+    "size": [
+      48,
+      48
+    ]
+  },
+  "goblin1_defeated": {
+    "file": "enemy/goblin1_defeated.png",
+    "type": "enemy",
+    "size": [
+      48,
+      48
+    ]
+  },
+  "skeleton1_defeated": {
+    "file": "enemy/skeleton1_defeated.png",
+    "type": "enemy",
+    "size": [
+      48,
+      48
+    ]
+  }
+}

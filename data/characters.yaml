@@ -1,0 +1,81 @@
+# Character Definitions
+# These define the starting party members
+
+hero:
+  id: hero
+  name: "Hero"
+  class: warrior
+  sprite_set: hero
+  is_player_controlled: true
+
+  base_stats:
+    health: 400
+    mana: 100
+    strength: 12
+    dexterity: 10
+    intelligence: 8
+    speed: 5.0
+    attack_range: 1.5
+    attack_speed: 1.0
+
+  starting_skills:
+    melee: 1
+    ranged: 0
+    combat_magic: 0
+    nature_magic: 0
+
+  starting_spells:
+    - whirlwind
+    - leap_strike
+    - crushing_blow
+    - shield_bash
+    - battle_cry
+
+  starting_equipment:
+    main_hand: short_sword
+    chest: leather_armor
+
+  starting_inventory:
+    - { item: health_potion_minor, quantity: 3 }
+    - { item: mana_potion_minor, quantity: 2 }
+
+  starting_gold: 50
+  formation_offset: [0.0, 0.0]
+
+
+lyra:
+  id: lyra
+  name: "Lyra"
+  class: mage
+  sprite_set: lyra
+  is_player_controlled: false
+
+  base_stats:
+    health: 280
+    mana: 150
+    strength: 6
+    dexterity: 8
+    intelligence: 14
+    speed: 4.5
+    attack_range: 6.0
+    attack_speed: 0.8
+
+  starting_skills:
+    melee: 0
+    ranged: 0
+    combat_magic: 1
+    nature_magic: 1
+
+  starting_equipment:
+    main_hand: apprentice_staff
+    chest: mage_robes
+
+  starting_spells:
+    - fireball
+    - ice_shard
+    - heal
+
+  starting_inventory: []
+  starting_gold: 0
+  formation_offset: [1.5, 0.5]
+

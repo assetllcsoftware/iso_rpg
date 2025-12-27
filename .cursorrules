@@ -1,0 +1,154 @@
+# ML Siege Development Guidelines
+
+## Project Context
+
+This is a **rewrite** of `dungeon_siege` (sister folder) using **Esper ECS**.
+The original game works but has architectural problems. We're building it right this time.
+
+---
+
+## Before Writing Code, Check These Docs
+
+### 1. Our Architecture
+- `docs/ARCHITECTURE.md` - How our ECS is structured
+- `docs/REFACTORING_PLAN.md` - The migration plan and phases
+
+### 2. Sister Folder System Model (What We're Building)
+The original game's rewrite docs tell us WHAT to build:
+- `/home/bryce/projects/dungeon_siege/docs/rewrite/07_FORMULAS.md` - All game math
+- `/home/bryce/projects/dungeon_siege/docs/rewrite/08_CONTENT.md` - All game content
+- `/home/bryce/projects/dungeon_siege/docs/rewrite/04_STATE_MACHINES.md` - All states
+- `/home/bryce/projects/dungeon_siege/docs/rewrite/06_SYSTEMS.md` - System specs
+- `/home/bryce/projects/dungeon_siege/docs/rewrite/22_EVENTS.md` - Event catalog
+
+---
+
+## The 10 Tenets (Non-Negotiable)
+
+1. **Single Source of Truth** - Each piece of data lives in ONE place
+2. **Explicit Dependencies** - No `_world_ref` magic, inject what you need
+3. **One Update Path** - Combat in CombatProcessor, nowhere else
+4. **Events for Communication** - Systems don't call each other directly
+5. **Data Down, Events Up** - Components hold data, processors emit events
+6. **Explicit State Machines** - Use enums, not boolean soup
+7. **Small Files** - Max 300 lines per file
+8. **Centralized Constants** - All magic numbers in constants.py
+9. **Pure Functions** - Calculations in formulas.py, no side effects
+10. **Sacred Game Loop** - Input → Update → Render → Present
+
+---
+
+## Architecture Reminders
+
+### Components = Pure Data (No Logic)
+```python
+# ✅ Good
+@dataclass
+class Health:
+    current: int
+    maximum: int
+
+# ❌ Bad - no methods!
+@dataclass
+class Health:
+    def take_damage(self, amount): ...  # NO!
+```
+
+### Processors = Logic (No State)
+```python
+# ✅ Good - queries entities, does work
+class CombatProcessor(esper.Processor):
+    def process(self, dt):
+        for ent, (health, target) in self.world.get_components(Health, CombatTarget):
+            # ALL combat logic here
+
+# ❌ Bad - storing state in processor
+class CombatProcessor(esper.Processor):
+    def __init__(self):
+        self.damage_dealt = 0  # NO! Use events instead
+```
+
+### Everyone Uses Same Systems
+- Player, Ally AI, Enemy AI → ALL use CombatProcessor
+- Player, Ally AI, Enemy AI → ALL use MagicProcessor
+- The ONLY difference is who DECIDES (InputProcessor vs AIProcessor)
+
+---
+
+## When Unsure, Add to Tech Debt
+
+If you're not sure about something, don't block. Add it to `docs/TECH_DEBT.md`:
+
+```markdown
+## Tech Debt Item
+- **Date:** 2024-12-25
+- **Issue:** Not sure if spell cooldowns should be per-entity or per-spell
+- **Current:** Implemented as per-entity
+- **Revisit:** When we add shared party cooldowns
+```
+
+Then **keep moving**.
+
+---
+
+## File Organization
+
+```
+src/
+├── core/           # Constants, events, formulas (no game logic)
+├── ecs/
+│   ├── components/ # Pure data classes
+│   ├── processors/ # All game logic lives here
+│   └── factories/  # Entity creation functions
+├── world/          # Dungeon gen, pathfinding, tiles
+├── rendering/      # Drawing only, no game logic
+├── ui/             # UI widgets, no game logic
+├── audio/          # Sound only
+└── scenes/         # Scene management
+
+data/               # YAML content files (not code)
+```
+
+---
+
+## Processor Order (In game.py)
+
+```python
+# This order matters!
+world.add_processor(InputProcessor())      # 1. Read input
+world.add_processor(AIProcessor())         # 2. AI decisions
+world.add_processor(MovementProcessor())   # 3. Apply movement
+world.add_processor(CombatProcessor())     # 4. Resolve combat
+world.add_processor(MagicProcessor())      # 5. Cast spells
+world.add_processor(EffectsProcessor())    # 6. Status effects
+world.add_processor(ProgressionProcessor()) # 7. XP/levels
+world.add_processor(AnimationProcessor())  # 8. Update sprites
+```
+
+---
+
+## Quick Reference: Where Does This Go?
+
+| If you need to... | Put it in... |
+|-------------------|--------------|
+| Store entity data | `components/*.py` |
+| Process game logic | `processors/*.py` |
+| Calculate a value | `core/formulas.py` |
+| Define a constant | `core/constants.py` |
+| Emit/handle events | `core/events.py` |
+| Create an entity | `factories/*.py` |
+| Draw something | `rendering/*.py` |
+| Load game data | `data/*.yaml` |
+
+---
+
+## Don't Forget
+
+- [ ] Is this following the tenets?
+- [ ] Is this <300 lines?
+- [ ] Am I putting logic in a component? (Don't!)
+- [ ] Am I creating a second update path? (Don't!)
+- [ ] Should this be an event instead of a direct call?
+- [ ] Is this constant hardcoded? (Move to constants.py)
+- [ ] Is this calculation inline? (Move to formulas.py)
+
