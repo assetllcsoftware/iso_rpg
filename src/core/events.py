@@ -184,11 +184,17 @@ class EventBus:
         
         Call this once per frame after all systems have updated.
         """
+        from .perf_monitor import perf
+        
         while self._queue:
             event = self._queue.pop(0)
             if event.type in self._subscribers:
                 for callback in self._subscribers[event.type]:
+                    # Time each handler
+                    handler_name = f"Event:{event.type.name}:{callback.__name__}"
+                    perf.mark(handler_name)
                     callback(event)
+                    perf.measure(handler_name)
     
     def clear(self):
         """Clear all queued events without processing."""

@@ -38,7 +38,11 @@ class MovementProcessor(esper.Processor):
     
     def process(self, dt: float):
         """Process movement for all entities."""
+        from ...core.perf_monitor import perf
+        perf.mark("MovementProcessor")
+        
         if not self.dungeon:
+            perf.measure("MovementProcessor")
             return
         
         # Convert intents to velocities
@@ -48,6 +52,8 @@ class MovementProcessor(esper.Processor):
         
         # Apply velocities with collision
         self._apply_velocities(dt)
+        
+        perf.measure("MovementProcessor")
     
     def _process_move_intents(self, dt: float):
         """Convert MoveIntent to Velocity."""

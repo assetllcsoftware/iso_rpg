@@ -29,6 +29,7 @@ class CombatProcessor(esper.Processor):
     def __init__(self, event_bus: EventBus):
         self.event_bus = event_bus
         self.dungeon = None
+        self.wipe_cooldown = 0.0  # Prevent multiple wipe events
     
     def set_dungeon(self, dungeon):
         """Set dungeon reference for line-of-sight checks."""
@@ -36,6 +37,13 @@ class CombatProcessor(esper.Processor):
     
     def process(self, dt: float):
         """Process combat each frame."""
+        from ...core.perf_monitor import perf
+        perf.mark("CombatProcessor")
+        
+        # Update wipe cooldown
+        if self.wipe_cooldown > 0:
+            self.wipe_cooldown -= dt
+        
         # Update attack cooldowns
         self._update_cooldowns(dt)
         
@@ -50,6 +58,8 @@ class CombatProcessor(esper.Processor):
         
         # Check for out-of-combat revives
         self._check_revives()
+        
+        perf.measure("CombatProcessor")
     
     def _update_cooldowns(self, dt: float):
         """Tick down attack cooldowns."""
@@ -297,11 +307,16 @@ class CombatProcessor(esper.Processor):
     
     def _check_party_wipe(self):
         """Check if all party members are downed."""
+        # Don't trigger wipe if we're still on cooldown (just respawned)
+        if self.wipe_cooldown > 0:
+            return
+        
         for ent, (member,) in esper.get_components(PartyMember):
             if not esper.has_component(ent, Downed):
                 return  # At least one is still up
         
-        # All downed!
+        # All downed! Set cooldown to prevent rapid re-triggers
+        self.wipe_cooldown = 2.0  # 2 second cooldown
         self.event_bus.emit(Event(EventType.PARTY_WIPED))
     
     def _check_revives(self):

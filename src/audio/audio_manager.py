@@ -31,7 +31,8 @@ class AudioManager:
         
         # Music state
         self.current_music: Optional[str] = None
-        self.music_files: Dict[str, str] = {}  # name -> temp file path
+        self.music_sounds: Dict[str, pygame.mixer.Sound] = {}  # name -> Sound object (preloaded)
+        self.music_channel: Optional[pygame.mixer.Channel] = None  # Dedicated channel for music
         
         # Generators
         self.sound_gen = SoundGenerator()
@@ -132,7 +133,7 @@ class AudioManager:
         return True
     
     def _load_music_from_files(self) -> bool:
-        """Try to load pre-generated music from files."""
+        """Try to load pre-generated music from files into memory."""
         music_dir = os.path.join(self.assets_path, "music")
         
         if not os.path.exists(music_dir):
@@ -147,13 +148,20 @@ class AudioManager:
                 print(f"Missing music file: {filepath}")
                 return False
         
-        # Store paths for music files
-        print("Loading pre-generated music...")
+        # Preload music as Sound objects (no blocking on play)
+        print("Loading pre-generated music into memory...")
         for name in music_names:
             filepath = os.path.join(music_dir, f"{name}.wav")
-            self.music_files[name] = filepath
+            try:
+                self.music_sounds[name] = pygame.mixer.Sound(filepath)
+            except Exception as e:
+                print(f"Error loading music {name}: {e}")
+                return False
         
-        print(f"Loaded {len(self.music_files)} music tracks from files")
+        # Reserve a channel for music
+        self.music_channel = pygame.mixer.Channel(7)  # Use channel 7 for music
+        
+        print(f"Loaded {len(self.music_sounds)} music tracks into memory")
         return True
     
     def _generate_sounds(self):
@@ -225,7 +233,7 @@ class AudioManager:
         print(f"Generated {len(self.sounds)} sound effects")
     
     def _generate_music(self):
-        """Generate background music tracks."""
+        """Generate background music tracks and load into memory."""
         print("Generating music...")
         
         # Create temp directory for music files
@@ -235,21 +243,24 @@ class AudioManager:
         dungeon_samples = self.music_gen.dungeon_ambient(60.0)
         dungeon_path = os.path.join(temp_dir, "ml_siege_dungeon.wav")
         self.music_gen.save_as_wav(dungeon_samples, dungeon_path)
-        self.music_files["dungeon_ambient"] = dungeon_path
+        self.music_sounds["dungeon_ambient"] = pygame.mixer.Sound(dungeon_path)
         
         # Combat music (30 seconds, loops)
         combat_samples = self.music_gen.combat_music(30.0)
         combat_path = os.path.join(temp_dir, "ml_siege_combat.wav")
         self.music_gen.save_as_wav(combat_samples, combat_path)
-        self.music_files["combat_music"] = combat_path
+        self.music_sounds["combat_music"] = pygame.mixer.Sound(combat_path)
         
         # Menu music (45 seconds, loops)
         menu_samples = self.music_gen.menu_music(45.0)
         menu_path = os.path.join(temp_dir, "ml_siege_menu.wav")
         self.music_gen.save_as_wav(menu_samples, menu_path)
-        self.music_files["menu_music"] = menu_path
+        self.music_sounds["menu_music"] = pygame.mixer.Sound(menu_path)
         
-        print(f"Generated {len(self.music_files)} music tracks")
+        # Reserve a channel for music
+        self.music_channel = pygame.mixer.Channel(7)
+        
+        print(f"Generated {len(self.music_sounds)} music tracks")
     
     def play_sound(self, sound_name: str, volume_mult: float = 1.0):
         """Play a sound effect."""
@@ -266,34 +277,35 @@ class AudioManager:
             sound.play()
     
     def play_music(self, music_name: str, loop: bool = True, fade_ms: int = 1000):
-        """Play background music with optional crossfade."""
+        """Play background music instantly (preloaded, no blocking)."""
         if self.music_muted:
             return
         
-        if music_name not in self.music_files:
+        if music_name not in self.music_sounds:
             print(f"Music not found: {music_name}")
             return
         
         if self.current_music == music_name:
             return  # Already playing
         
-        # Fade out current music
-        if pygame.mixer.music.get_busy():
-            pygame.mixer.music.fadeout(fade_ms)
+        if not self.music_channel:
+            return
         
-        # Load and play new music
-        try:
-            pygame.mixer.music.load(self.music_files[music_name])
-            pygame.mixer.music.set_volume(self.music_volume * self.master_volume)
-            loops = -1 if loop else 0
-            pygame.mixer.music.play(loops, fade_ms=fade_ms)
-            self.current_music = music_name
-        except Exception as e:
-            print(f"Error playing music: {e}")
+        # Stop current music with fadeout
+        if self.music_channel.get_busy():
+            self.music_channel.fadeout(fade_ms)
+        
+        # Play new music (already loaded in memory - instant!)
+        sound = self.music_sounds[music_name]
+        sound.set_volume(self.music_volume * self.master_volume)
+        loops = -1 if loop else 0
+        self.music_channel.play(sound, loops=loops, fade_ms=fade_ms)
+        self.current_music = music_name
     
     def stop_music(self, fade_ms: int = 500):
         """Stop background music with fadeout."""
-        pygame.mixer.music.fadeout(fade_ms)
+        if self.music_channel:
+            self.music_channel.fadeout(fade_ms)
         self.current_music = None
     
     def pause_music(self):

@@ -45,6 +45,13 @@ class InputProcessor(esper.Processor):
         
         # World processor reference (set by game) for stairs
         self.world_processor = None
+        
+        # Dungeon reference for LOS checks
+        self.dungeon = None
+    
+    def set_dungeon(self, dungeon):
+        """Set dungeon reference for LOS checks."""
+        self.dungeon = dungeon
     
     def handle_event(self, event: pygame.event.Event):
         """Called from game loop to process pygame events."""
@@ -188,6 +195,12 @@ class InputProcessor(esper.Processor):
             
             dist = distance(player_pos.x, player_pos.y, pos.x, pos.y)
             if dist < nearest_dist:
+                # Check line of sight - can't target through walls
+                if self.dungeon and not self.dungeon.has_line_of_sight(
+                    player_pos.x, player_pos.y, pos.x, pos.y
+                ):
+                    continue
+                
                 nearest_dist = dist
                 nearest = ent
         

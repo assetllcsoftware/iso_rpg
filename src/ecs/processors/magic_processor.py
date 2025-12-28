@@ -106,6 +106,9 @@ class MagicProcessor(esper.Processor):
     
     def process(self, dt: float):
         """Process magic each frame."""
+        from ...core.perf_monitor import perf
+        perf.mark("MagicProcessor")
+        
         # Update spell cooldowns
         self._update_cooldowns(dt)
         
@@ -129,6 +132,8 @@ class MagicProcessor(esper.Processor):
         
         # Update status effects
         self._update_status_effects(dt)
+        
+        perf.measure("MagicProcessor")
     
     def _process_active_abilities(self, dt: float):
         """Process ongoing multi-hit abilities like whirlwind."""
@@ -226,9 +231,37 @@ class MagicProcessor(esper.Processor):
             if progress >= 1.0 and not leap.has_landed:
                 leap.has_landed = True
                 
-                # Snap to final position
-                pos.x = leap.target_x
-                pos.y = leap.target_y
+                # Snap to final position - but validate it's walkable first!
+                final_x, final_y = leap.target_x, leap.target_y
+                if self.dungeon:
+                    if not self.dungeon.is_walkable(int(final_x), int(final_y)):
+                        # Target became invalid - use clamp_position to find nearest valid
+                        final_x, final_y = self.dungeon.clamp_position(final_x, final_y)
+                    else:
+                        # Snap to tile center if too close to edges (prevents getting stuck)
+                        tile_x, tile_y = int(final_x), int(final_y)
+                        frac_x = final_x - tile_x
+                        frac_y = final_y - tile_y
+                        
+                        # If within 0.2 of any edge, snap to center
+                        if frac_x < 0.2 or frac_x > 0.8 or frac_y < 0.2 or frac_y > 0.8:
+                            # Check if adjacent tile in that direction is a wall
+                            needs_snap = False
+                            if frac_x < 0.2 and not self.dungeon.is_walkable(tile_x - 1, tile_y):
+                                needs_snap = True
+                            if frac_x > 0.8 and not self.dungeon.is_walkable(tile_x + 1, tile_y):
+                                needs_snap = True
+                            if frac_y < 0.2 and not self.dungeon.is_walkable(tile_x, tile_y - 1):
+                                needs_snap = True
+                            if frac_y > 0.8 and not self.dungeon.is_walkable(tile_x, tile_y + 1):
+                                needs_snap = True
+                            
+                            if needs_snap:
+                                final_x = tile_x + 0.5
+                                final_y = tile_y + 0.5
+                
+                pos.x = final_x
+                pos.y = final_y
                 
                 # Deal damage to main target
                 if leap.target_id >= 0 and esper.entity_exists(leap.target_id):
@@ -398,6 +431,13 @@ class MagicProcessor(esper.Processor):
                     
                     if dist > spell_range:
                         # Out of range - skip for now
+                        esper.remove_component(ent, CastIntent)
+                        continue
+                    
+                    # Check line of sight - can't cast through walls
+                    if self.dungeon and not self.dungeon.has_line_of_sight(
+                        pos.x, pos.y, target_pos.x, target_pos.y
+                    ):
                         esper.remove_component(ent, CastIntent)
                         continue
                     
@@ -867,6 +907,12 @@ class MagicProcessor(esper.Processor):
                 return
             target_pos = esper.component_for_entity(target_id, Position)
             
+            # Check line of sight - can't leap through walls
+            if self.dungeon and not self.dungeon.has_line_of_sight(
+                caster_pos.x, caster_pos.y, target_pos.x, target_pos.y
+            ):
+                return  # Can't target through walls
+            
             # Calculate AoE damage
             aoe_data = spell_data.get("aoe_on_impact", {})
             aoe_radius = aoe_data.get("radius", 0) if aoe_data else 0
@@ -889,6 +935,23 @@ class MagicProcessor(esper.Processor):
                 land_y = caster_pos.y + (dy / dist) * land_dist
             else:
                 land_x, land_y = target_pos.x, target_pos.y
+            
+            # Ensure landing position is walkable
+            if self.dungeon and not self.dungeon.is_walkable(int(land_x), int(land_y)):
+                # Try landing at target position instead
+                if self.dungeon.is_walkable(int(target_pos.x), int(target_pos.y)):
+                    land_x, land_y = target_pos.x, target_pos.y
+                else:
+                    # Find nearest walkable tile
+                    for offset in [(0, 1), (1, 0), (0, -1), (-1, 0), (1, 1), (-1, 1), (1, -1), (-1, -1)]:
+                        check_x = int(target_pos.x) + offset[0]
+                        check_y = int(target_pos.y) + offset[1]
+                        if self.dungeon.is_walkable(check_x, check_y):
+                            land_x, land_y = check_x + 0.5, check_y + 0.5
+                            break
+                    else:
+                        # Last resort: stay where we are
+                        land_x, land_y = caster_pos.x, caster_pos.y
             
             # Add LeapingAbility component
             esper.add_component(caster, LeapingAbility(
@@ -960,8 +1023,24 @@ class MagicProcessor(esper.Processor):
                 # Normalize and apply knockback
                 dx /= dist
                 dy /= dist
-                target_pos.x += dx * knockback_dist
-                target_pos.y += dy * knockback_dist
+                
+                # Try progressively shorter knockback distances until we find a valid position
+                for mult in [1.0, 0.75, 0.5, 0.25, 0]:
+                    test_x = target_pos.x + dx * knockback_dist * mult
+                    test_y = target_pos.y + dy * knockback_dist * mult
+                    
+                    if self.dungeon:
+                        # Check if path to new position is clear (using LOS)
+                        if self.dungeon.is_walkable(int(test_x), int(test_y)) and \
+                           self.dungeon.has_line_of_sight(target_pos.x, target_pos.y, test_x, test_y):
+                            target_pos.x = test_x
+                            target_pos.y = test_y
+                            break
+                    else:
+                        # No dungeon, just apply knockback
+                        target_pos.x = test_x
+                        target_pos.y = test_y
+                        break
         
         # Apply AoE on impact if specified (for crushing blow ground crack)
         aoe_data = spell_data.get("aoe_on_impact", {})
@@ -1241,6 +1320,12 @@ class MagicProcessor(esper.Processor):
     def _update_projectiles(self, dt: float):
         """Update projectile positions and check for hits."""
         for ent, (pos, vel, proj) in esper.get_components(Position, Velocity, Projectile):
+            # Check if projectile hit a wall
+            if self.dungeon and not self.dungeon.is_walkable(int(pos.x), int(pos.y)):
+                # Hit a wall - destroy projectile
+                esper.add_component(ent, ToRemove())
+                continue
+            
             # Homing: Update velocity to track target
             if proj.target_id >= 0 and esper.entity_exists(proj.target_id):
                 target_pos = esper.component_for_entity(proj.target_id, Position)

@@ -107,7 +107,7 @@ class Game:
     
     def _setup_processors(self):
         """Initialize and add all ECS processors in correct order."""
-        from .ecs.processors import RegenProcessor
+        from .ecs.processors import RegenProcessor, PositionValidator
         
         # Create processors
         self.input_processor = InputProcessor(self.event_bus)
@@ -123,6 +123,7 @@ class Game:
         self.world_processor = WorldProcessor(self.event_bus)
         self.dropped_item_processor = DroppedItemProcessor(self.event_bus)
         self.regen_processor = RegenProcessor(self.event_bus)
+        self.position_validator = PositionValidator(self.event_bus)
         
         # Add in order (priority - higher runs first)
         esper.add_processor(self.input_processor, priority=100)
@@ -137,12 +138,14 @@ class Game:
         esper.add_processor(self.loot_processor, priority=30)
         esper.add_processor(self.dropped_item_processor, priority=25)
         esper.add_processor(self.save_load_processor, priority=20)
+        esper.add_processor(self.position_validator, priority=5)  # Validate before cleanup
         esper.add_processor(self.cleanup_processor, priority=0)  # Always last
         
         # Give input processor references to other processors
         self.input_processor.camera = self.camera
         self.input_processor.save_load_processor = self.save_load_processor
         self.input_processor.world_processor = self.world_processor
+        
     
     def _setup_event_handlers(self):
         """Subscribe to game events."""
@@ -168,9 +171,68 @@ class Game:
             self.pause_overlay.hide()
     
     def _on_party_wipe(self, event):
-        """Handle party wipe."""
-        self.state = GameState.GAME_OVER
-        self.game_over_overlay.show("All heroes have fallen...")
+        """Handle party wipe - respawn at entrance with gold penalty."""
+        from .ecs.components import Position, Health, Mana, Downed, Dead, Gold
+        from .core.constants import DEATH_GOLD_PENALTY
+        
+        # Get entrance position (stairs up)
+        if self.dungeon and self.dungeon.stairs_up:
+            spawn_x, spawn_y = self.dungeon.stairs_up
+        else:
+            spawn_x, spawn_y = 5, 5  # Fallback
+        
+        gold_lost = 0
+        
+        # Revive and move all party members
+        for i, ent in enumerate(self.party_entities):
+            if not esper.entity_exists(ent):
+                continue
+            
+            # Remove dead/downed status
+            if esper.has_component(ent, Dead):
+                esper.remove_component(ent, Dead)
+            if esper.has_component(ent, Downed):
+                esper.remove_component(ent, Downed)
+            
+            # Heal to full
+            if esper.has_component(ent, Health):
+                health = esper.component_for_entity(ent, Health)
+                health.current = health.maximum
+            
+            # Restore mana
+            if esper.has_component(ent, Mana):
+                mana = esper.component_for_entity(ent, Mana)
+                mana.current = mana.maximum
+            
+            # Move to entrance (stagger positions slightly)
+            if esper.has_component(ent, Position):
+                pos = esper.component_for_entity(ent, Position)
+                pos.x = spawn_x + (i % 2) * 0.5
+                pos.y = spawn_y + (i // 2) * 0.5
+            
+            # Take gold penalty (only from first party member who has gold)
+            if gold_lost == 0 and esper.has_component(ent, Gold):
+                gold = esper.component_for_entity(ent, Gold)
+                gold_lost = int(gold.amount * DEATH_GOLD_PENALTY)
+                gold.amount -= gold_lost
+        
+        # Reset animation states
+        from .ecs.components import Animation, AnimationState
+        for ent in self.party_entities:
+            if esper.entity_exists(ent) and esper.has_component(ent, Animation):
+                anim = esper.component_for_entity(ent, Animation)
+                anim.state = AnimationState.IDLE
+                anim.frame = 0
+        
+        # Center camera on party
+        if self.party_entities and esper.entity_exists(self.party_entities[0]):
+            if esper.has_component(self.party_entities[0], Position):
+                pos = esper.component_for_entity(self.party_entities[0], Position)
+                self.camera.center_on(pos.x, pos.y)
+        
+        # Show notification
+        self.notifications.add(f"You died! Lost {gold_lost} gold.", (255, 100, 100))
+        self.notifications.add("Respawned at entrance. Try an easier level?", (255, 255, 150))
     
     def _on_camera_zoom(self, event):
         """Handle camera zoom."""
@@ -286,6 +348,8 @@ class Game:
         self.movement_processor.set_dungeon(self.dungeon)
         self.combat_processor.set_dungeon(self.dungeon)
         self.magic_processor.set_dungeon(self.dungeon)
+        self.input_processor.set_dungeon(self.dungeon)
+        self.position_validator.set_dungeon(self.dungeon)
         self.ai_processor.set_pathfinder(self.pathfinder)
         self.ai_processor.set_dungeon(self.dungeon)
         self.world_processor.set_dungeon(self.dungeon)
@@ -424,6 +488,8 @@ class Game:
         self.movement_processor.set_dungeon(self.dungeon)
         self.combat_processor.set_dungeon(self.dungeon)
         self.magic_processor.set_dungeon(self.dungeon)
+        self.input_processor.set_dungeon(self.dungeon)
+        self.position_validator.set_dungeon(self.dungeon)
         self.ai_processor.set_pathfinder(self.pathfinder)
         self.ai_processor.set_dungeon(self.dungeon)
         self.world_processor.set_dungeon(self.dungeon)
@@ -493,6 +559,8 @@ class Game:
         self.movement_processor.set_dungeon(self.dungeon)
         self.combat_processor.set_dungeon(self.dungeon)
         self.magic_processor.set_dungeon(self.dungeon)
+        self.input_processor.set_dungeon(self.dungeon)
+        self.position_validator.set_dungeon(self.dungeon)
         self.ai_processor.set_pathfinder(self.pathfinder)
         self.ai_processor.set_dungeon(self.dungeon)
         self.world_processor.set_dungeon(self.dungeon)
@@ -538,10 +606,14 @@ class Game:
     
     def run(self):
         """Main game loop."""
+        from .core.perf_monitor import perf
+        
         # Start new game immediately
         self.start_new_game()
         
         while self.running:
+            perf.frame_start()
+            
             current_time = time.time()
             frame_time = min(current_time - self.previous_time, 0.25)
             self.previous_time = current_time
@@ -566,7 +638,7 @@ class Game:
             if self.state == GameState.GAME_OVER:
                 self.game_over_overlay.update(frame_time)
             
-            # PHASE 3: RENDER (variable)
+            # PHASE 3: RENDER (variable) - timing is inside renderer
             self._render(frame_time)
             
             # PHASE 4: PRESENT
@@ -575,6 +647,8 @@ class Game:
             # Cap frame rate
             self.clock.tick(FPS)
             self.fps = self.clock.get_fps()
+            
+            perf.frame_end()
     
     def _handle_events(self):
         """Handle pygame events."""
@@ -625,7 +699,7 @@ class Game:
     
     def _update(self, dt: float):
         """Update game state."""
-        # Process all ECS systems
+        # Process all ECS systems (each has its own perf timing)
         esper.process(dt)
         
         # Process events

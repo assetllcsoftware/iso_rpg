@@ -579,13 +579,18 @@ class Dungeon:
     def has_line_of_sight(self, x1: float, y1: float, x2: float, y2: float) -> bool:
         """Check if there's a clear line of sight between two points.
         
-        Uses Bresenham's line algorithm to check tiles along the path.
+        Uses Bresenham's line algorithm with diagonal blocking check.
+        No corner-cutting allowed - can't shoot through diagonal wall gaps.
         """
         # Convert to tile coordinates
         ix1, iy1 = int(x1), int(y1)
         ix2, iy2 = int(x2), int(y2)
         
-        # Bresenham's line algorithm
+        # Same tile = always visible
+        if ix1 == ix2 and iy1 == iy2:
+            return True
+        
+        # Bresenham's line algorithm with diagonal blocking
         dx = abs(ix2 - ix1)
         dy = abs(iy2 - iy1)
         sx = 1 if ix1 < ix2 else -1
@@ -593,28 +598,75 @@ class Dungeon:
         err = dx - dy
         
         x, y = ix1, iy1
+        prev_x, prev_y = x, y
         
         while True:
-            # Check if current tile blocks sight (VOID or WALL)
-            if x != ix1 or y != iy1:  # Don't check starting tile
-                if x != ix2 or y != iy2:  # Don't check ending tile
-                    if not self.is_walkable(x, y):
-                        return False
-            
             if x == ix2 and y == iy2:
                 break
             
+            prev_x, prev_y = x, y
             e2 = 2 * err
+            
+            moved_x = False
+            moved_y = False
+            
             if e2 > -dy:
                 err -= dy
                 x += sx
+                moved_x = True
             if e2 < dx:
                 err += dx
                 y += sy
+                moved_y = True
+            
+            # If we moved diagonally, check that we're not cutting through a corner
+            if moved_x and moved_y:
+                # Both adjacent tiles must be walkable to move diagonally
+                if not self.is_walkable(prev_x + sx, prev_y) and not self.is_walkable(prev_x, prev_y + sy):
+                    return False  # Blocked by corner
+                # If either adjacent is a wall, that's also suspicious for hallways
+                if not self.is_walkable(prev_x + sx, prev_y) or not self.is_walkable(prev_x, prev_y + sy):
+                    # Stricter check: if moving diagonally and one side is blocked, no LOS
+                    return False
+            
+            # Check if current tile blocks sight
+            if x != ix2 or y != iy2:  # Don't check ending tile
+                if not self.is_walkable(x, y):
+                    return False
         
         return True
     
     def is_in_bounds(self, x: int, y: int) -> bool:
         """Check if position is within dungeon bounds."""
         return 0 <= x < self.width and 0 <= y < self.height
+    
+    def clamp_position(self, x: float, y: float) -> Tuple[float, float]:
+        """Clamp a position to valid walkable area.
+        
+        Tries to find the nearest walkable tile if the position is not walkable.
+        """
+        # First check if it's already walkable
+        if self.is_walkable(int(x), int(y)):
+            return x, y
+        
+        # Otherwise, find nearest walkable tile
+        best_x, best_y = x, y
+        best_dist = float('inf')
+        
+        # Search in expanding radius for a walkable tile
+        for radius in range(1, 10):
+            for dx in range(-radius, radius + 1):
+                for dy in range(-radius, radius + 1):
+                    check_x = int(x) + dx
+                    check_y = int(y) + dy
+                    if self.is_walkable(check_x, check_y):
+                        dist = (dx * dx + dy * dy) ** 0.5
+                        if dist < best_dist:
+                            best_dist = dist
+                            best_x = check_x + 0.5
+                            best_y = check_y + 0.5
+            if best_dist < float('inf'):
+                break
+        
+        return best_x, best_y
 

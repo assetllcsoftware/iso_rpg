@@ -12,6 +12,7 @@ from .cleanup_processor import CleanupProcessor
 from .save_load_processor import SaveLoadProcessor
 from .world_processor import WorldProcessor, DroppedItemProcessor
 from .regen_processor import RegenProcessor
+from .position_validator import PositionValidator
 
 __all__ = [
     'InputProcessor',
@@ -27,4 +28,5 @@ __all__ = [
     'WorldProcessor',
     'DroppedItemProcessor',
     'RegenProcessor',
+    'PositionValidator',
 ]

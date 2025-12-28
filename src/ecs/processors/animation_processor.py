@@ -32,9 +32,14 @@ class AnimationProcessor(esper.Processor):
     
     def process(self, dt: float):
         """Update animations each frame."""
+        from ...core.perf_monitor import perf
+        perf.mark("AnimationProcessor")
+        
         self._update_animation_states(dt)
         self._update_damage_numbers(dt)
         self._update_visual_effects(dt)
+        
+        perf.measure("AnimationProcessor")
     
     def _update_animation_states(self, dt: float):
         """Update animation states based on entity state."""

@@ -36,3 +36,4 @@ Pipfile.lock
 # Audio temp files (regenerate with tools/generate_audio.py)
 # assets/audio/sounds/
 # assets/audio/music/
+perf_log.txt

@@ -13,7 +13,7 @@ from ..components import (
     Health, Mana, CombatStats, CombatTarget, AttackIntent,
     AIController, EnemyAI, AllyAI, AggroRange, LeashRange,
     PartyMember, Enemy, Ally, PlayerControlled, Selected, Downed, Dead,
-    SpellBook, Casting
+    SpellBook, Casting, CastIntent, GlobalCooldown
 )
 from ...core.events import EventBus, Event, EventType
 from ...core.constants import AIState
@@ -48,8 +48,13 @@ class AIProcessor(esper.Processor):
     
     def process(self, dt: float):
         """Process AI decisions each frame."""
+        from ...core.perf_monitor import perf
+        perf.mark("AIProcessor")
+        
         self._process_enemy_ai(dt)
         self._process_ally_ai(dt)
+        
+        perf.measure("AIProcessor")
     
     # =========================================================================
     # ENEMY AI
@@ -212,17 +217,28 @@ class AIProcessor(esper.Processor):
             if nearest_enemy and enemy_dist <= ALLY_ENGAGE_RANGE:
                 attack_range = self._get_attack_range(ent)
                 
-                if enemy_dist <= attack_range:
-                    # In range - attack!
+                # Get enemy position for LOS check
+                enemy_pos = esper.component_for_entity(nearest_enemy, Position)
+                has_los = True
+                if self.dungeon:
+                    has_los = self.dungeon.has_line_of_sight(
+                        pos.x, pos.y, enemy_pos.x, enemy_pos.y
+                    )
+                
+                if enemy_dist <= attack_range and has_los:
+                    # In range AND has LOS - attack!
                     self._set_attack_intent(ent, nearest_enemy)
                     self._stop_moving(ent)
                     ai.state = AIState.ENGAGE
                     ai.target_id = nearest_enemy
-                else:
-                    # Move toward enemy
+                elif has_los:
+                    # Has LOS but out of range - move toward enemy
                     self._move_toward_entity(ent, pos, nearest_enemy)
                     ai.state = AIState.ENGAGE
                     ai.target_id = nearest_enemy
+                else:
+                    # No LOS - don't engage, follow leader instead
+                    pass
                 continue
             
             # State: FOLLOW leader
@@ -249,6 +265,16 @@ class AIProcessor(esper.Processor):
         # Skip if already casting
         if esper.has_component(ent, Casting):
             return
+        
+        # Skip if player already queued a spell (don't override player input!)
+        if esper.has_component(ent, CastIntent):
+            return
+        
+        # Skip if on global cooldown
+        if esper.has_component(ent, GlobalCooldown):
+            gcd = esper.component_for_entity(ent, GlobalCooldown)
+            if not gcd.ready:
+                return
         
         # Need a spellbook
         if not esper.has_component(ent, SpellBook):

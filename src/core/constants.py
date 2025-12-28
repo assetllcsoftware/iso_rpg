@@ -286,7 +286,7 @@ MANA_REGEN_COMBAT_MULT = 0.5   # 50% regen in combat
 # ECONOMY
 # =============================================================================
 
-DEATH_GOLD_PENALTY = 0.10      # Lose 10% gold on party wipe
+DEATH_GOLD_PENALTY = 0.50      # Lose 50% gold on party wipe
 MERCHANT_BUY_RATE = 0.5        # Merchant pays 50% of item value
 MERCHANT_SELL_RATE = 1.0       # Merchant sells at 100% value
 

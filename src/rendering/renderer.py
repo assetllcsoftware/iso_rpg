@@ -144,6 +144,9 @@ class Renderer:
     
     def render(self, dungeon: Optional[Dungeon]):
         """Render the entire game scene."""
+        from ..core.perf_monitor import perf
+        perf.mark("Renderer")
+        
         # Clear screen
         self.screen.fill(COLOR_BG)
         
@@ -185,6 +188,8 @@ class Renderer:
         
         # Render damage numbers (on top)
         self._render_damage_numbers()
+        
+        perf.measure("Renderer")
     
     def _render_dungeon(self, dungeon: Dungeon):
         """Render dungeon tiles."""
