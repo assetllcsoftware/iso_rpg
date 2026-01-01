@@ -941,10 +941,7 @@ class MagicProcessor(esper.Processor):
             target_pos = esper.component_for_entity(target_id, Position)
             
             # Check line of sight - can't leap through walls
-            if not self.dungeon:
-                print(f"[WARNING] MagicProcessor.dungeon is None! Leap not blocked by walls!")
-            elif not self.dungeon.has_line_of_sight(caster_pos.x, caster_pos.y, target_pos.x, target_pos.y):
-                print(f"[LOS BLOCKED] Leap from ({caster_pos.x:.1f},{caster_pos.y:.1f}) to ({target_pos.x:.1f},{target_pos.y:.1f})")
+            if self.dungeon and not self.dungeon.has_line_of_sight(caster_pos.x, caster_pos.y, target_pos.x, target_pos.y):
                 return  # Can't target through walls
             
             # Calculate AoE damage

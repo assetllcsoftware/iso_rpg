@@ -327,10 +327,8 @@ class InputProcessor(esper.Processor):
                 continue
             
             # Check line of sight from player to target
-            if player_pos:
-                if not self.dungeon:
-                    print(f"[WARNING] InputProcessor.dungeon is None! Targeting not blocked by walls!")
-                elif not self.dungeon.has_line_of_sight(player_pos.x, player_pos.y, pos.x, pos.y):
+            if player_pos and self.dungeon:
+                if not self.dungeon.has_line_of_sight(player_pos.x, player_pos.y, pos.x, pos.y):
                     continue  # Can't target through walls
             
             # Get collision radius for better clicking

@@ -137,9 +137,7 @@ class CombatProcessor(esper.Processor):
                 continue
             
             # Check line of sight
-            if not self.dungeon:
-                print(f"[WARNING] CombatProcessor.dungeon is None! Attacks not blocked by walls!")
-            elif not self.dungeon.has_line_of_sight(pos.x, pos.y, target_pos.x, target_pos.y):
+            if self.dungeon and not self.dungeon.has_line_of_sight(pos.x, pos.y, target_pos.x, target_pos.y):
                 continue  # Can't attack through walls
             
             # Check cooldown

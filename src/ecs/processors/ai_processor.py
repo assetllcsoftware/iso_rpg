@@ -128,9 +128,7 @@ class AIProcessor(esper.Processor):
                 target_pos = esper.component_for_entity(ai.target_id, Position)
                 
                 # Check line of sight - can't attack through walls
-                if not self.dungeon:
-                    print(f"[WARNING] AIProcessor.dungeon is None! Enemy attack LOS not checked!")
-                elif not self.dungeon.has_line_of_sight(pos.x, pos.y, target_pos.x, target_pos.y):
+                if self.dungeon and not self.dungeon.has_line_of_sight(pos.x, pos.y, target_pos.x, target_pos.y):
                     # Lost sight - try to chase around obstacles
                     ai.state = AIState.CHASE
                     continue
@@ -220,9 +218,7 @@ class AIProcessor(esper.Processor):
                 # Get enemy position for LOS check
                 enemy_pos = esper.component_for_entity(nearest_enemy, Position)
                 has_los = True
-                if not self.dungeon:
-                    print(f"[WARNING] AIProcessor.dungeon is None! Ally engage LOS not checked!")
-                else:
+                if self.dungeon:
                     has_los = self.dungeon.has_line_of_sight(
                         pos.x, pos.y, enemy_pos.x, enemy_pos.y
                     )
@@ -429,9 +425,7 @@ class AIProcessor(esper.Processor):
                 continue
             
             # Check line of sight - can't target through walls
-            if not self.dungeon:
-                print(f"[WARNING] AIProcessor.dungeon is None! Enemy targeting not blocked!")
-            elif not self.dungeon.has_line_of_sight(pos.x, pos.y, member_pos.x, member_pos.y):
+            if self.dungeon and not self.dungeon.has_line_of_sight(pos.x, pos.y, member_pos.x, member_pos.y):
                 continue
             
             dist = distance(pos.x, pos.y, member_pos.x, member_pos.y)
@@ -451,9 +445,7 @@ class AIProcessor(esper.Processor):
                 continue
             
             # Check line of sight if we have a dungeon
-            if not self.dungeon:
-                print(f"[WARNING] AIProcessor.dungeon is None! Ally targeting not blocked!")
-            elif not self.dungeon.has_line_of_sight(pos.x, pos.y, enemy_pos.x, enemy_pos.y):
+            if self.dungeon and not self.dungeon.has_line_of_sight(pos.x, pos.y, enemy_pos.x, enemy_pos.y):
                 continue
             
             dist = distance(pos.x, pos.y, enemy_pos.x, enemy_pos.y)

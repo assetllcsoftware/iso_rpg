@@ -302,14 +302,11 @@ class Game:
     
     def _on_town_entered(self, event):
         """Handle entering town."""
-        print(f"[TOWN] Entering town! Previous state: {self.state}")
         self.state = GameState.TOWN
         self.town_scene.show(dungeon_level=self.current_level)
-        print(f"[TOWN] Town scene active: {self.town_scene.active}, State: {self.state}")
     
     def _on_town_left(self, event):
         """Handle leaving town."""
-        print(f"[TOWN] Leaving town, going to level {event.data.get('target_level', 1)}")
         self.town_scene.hide()
         target_level = event.data.get("target_level", 1)
         
@@ -317,7 +314,6 @@ class Game:
         self.current_level = target_level
         self._generate_new_level()
         self.state = GameState.PLAYING
-        print(f"[TOWN] Back to playing, state: {self.state}")
     
     def _on_game_loaded(self, event):
         """Handle game loaded - regenerate dungeon with saved seed and restore state."""
@@ -645,27 +641,45 @@ class Game:
             if self.state == GameState.GAME_OVER:
                 self.game_over_overlay.update(frame_time)
             
-            # Town uses same movement/animation as dungeon
+            # Town uses same ECS as dungeon - just different map
             if self.state == GameState.TOWN:
-                # Swap to town map for collision
-                self.movement_processor.set_dungeon(self.town_scene.town_map)
-                self.input_processor.set_dungeon(self.town_scene.town_map)
+                self.accumulator += frame_time
                 
-                # Run same processors as dungeon (minus combat/AI)
-                self.movement_processor.process(frame_time)
-                self.animation_processor.process(frame_time)
+                while self.accumulator >= FIXED_TIMESTEP:
+                    # Swap to town map for all processors that need collision
+                    self.movement_processor.set_dungeon(self.town_scene.town_map)
+                    self.input_processor.set_dungeon(self.town_scene.town_map)
+                    self.position_validator.set_dungeon(self.town_scene.town_map)
+                    self.ai_processor.set_dungeon(self.town_scene.town_map)
+                    self.combat_processor.set_dungeon(self.town_scene.town_map)
+                    self.magic_processor.set_dungeon(self.town_scene.town_map)
+                    
+                    # Run ECS - combat/AI will do nothing (no enemies in town)
+                    esper.process(FIXED_TIMESTEP)
+                    self.event_bus.process()
+                    
+                    # Restore dungeon reference for when we leave
+                    self.movement_processor.set_dungeon(self.dungeon)
+                    self.input_processor.set_dungeon(self.dungeon)
+                    self.position_validator.set_dungeon(self.dungeon)
+                    self.ai_processor.set_dungeon(self.dungeon)
+                    self.combat_processor.set_dungeon(self.dungeon)
+                    self.magic_processor.set_dungeon(self.dungeon)
+                    
+                    self.accumulator -= FIXED_TIMESTEP
+                
+                # Town-specific update (NPC proximity check)
                 self.town_scene.update(frame_time)
                 
-                # Center camera on leader
+                # Camera follows party leader
                 for ent, (member, pos) in esper.get_components(PartyMember, Position):
                     if member.party_index == 0:
-                        self.camera.center_on(pos.x, pos.y)
+                        self.camera.follow(pos.x, pos.y)
                         break
                 self.camera.update(frame_time)
                 
-                # Restore dungeon reference
-                self.movement_processor.set_dungeon(self.dungeon)
-                self.input_processor.set_dungeon(self.dungeon)
+                # Update notifications
+                self.notifications.update(frame_time)
             
             # PHASE 3: RENDER (variable) - timing is inside renderer
             self._render(frame_time)
