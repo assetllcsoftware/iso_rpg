@@ -11,7 +11,8 @@ prevents soft-locks and off-map glitches.
 import esper
 from typing import Tuple
 
-from ..components import Position, PartyMember, Enemy, Dead, ToRemove
+from ..components import Position, PartyMember, Enemy, Dead, ToRemove, Projectile, AreaEffect
+from ..components.rendering import VisualEffect
 from ...core.events import EventBus, Event, EventType
 
 
@@ -43,6 +44,14 @@ class PositionValidator(esper.Processor):
         for ent, (pos,) in esper.get_components(Position):
             # Skip dead entities - they might be in walls for death animation
             if esper.has_component(ent, Dead):
+                continue
+            
+            # Skip projectiles - they fly through the air and handle their own collision
+            if esper.has_component(ent, Projectile):
+                continue
+            
+            # Skip visual effects and area effects - they can be anywhere
+            if esper.has_component(ent, VisualEffect) or esper.has_component(ent, AreaEffect):
                 continue
             
             # Check if current position is valid
@@ -100,7 +109,8 @@ class PositionValidator(esper.Processor):
             if self.dungeon.is_walkable(int(last_x), int(last_y)):
                 pos.x = last_x
                 pos.y = last_y
-                print(f"[PositionValidator] Entity {ent} reset to last valid: ({last_x:.1f}, {last_y:.1f})")
+                # Only log occasionally to reduce spam
+                # print(f"[PositionValidator] Entity {ent} reset to last valid: ({last_x:.1f}, {last_y:.1f})")
                 return
         
         # Try 2: Search for nearest walkable tile
@@ -109,7 +119,8 @@ class PositionValidator(esper.Processor):
             pos.x = best_x
             pos.y = best_y
             self._last_valid_positions[ent] = (best_x, best_y)
-            print(f"[PositionValidator] Entity {ent} moved to nearest walkable: ({best_x:.1f}, {best_y:.1f})")
+            # Only log occasionally to reduce spam
+            # print(f"[PositionValidator] Entity {ent} moved to nearest walkable: ({best_x:.1f}, {best_y:.1f})")
             return
         
         # Try 3: Party members get teleported to spawn point
@@ -122,8 +133,13 @@ class PositionValidator(esper.Processor):
                 print(f"[PositionValidator] Party member {ent} emergency teleported to spawn!")
                 return
         
-        # Try 4: Enemies get deleted if stuck
+        # Try 4: Enemies far off-map are intentionally hidden (e.g., during town visit)
+        # Only delete if they're just slightly off-map (actual stuck, not intentionally hidden)
         if esper.has_component(ent, Enemy):
+            # If very far away, they're intentionally hidden - don't delete
+            if abs(pos.x) > 500 or abs(pos.y) > 500:
+                return  # Intentionally hidden, leave alone
+            # Otherwise they got stuck legitimately - remove them
             esper.add_component(ent, ToRemove())
             print(f"[PositionValidator] Enemy {ent} was stuck off-map and removed!")
             return

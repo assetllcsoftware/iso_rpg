@@ -202,6 +202,26 @@ class SaveLoadProcessor(esper.Processor):
             member = esper.component_for_entity(ent, PartyMember)
             char["party_index"] = member.party_index
         
+        # Save inventory
+        if esper.has_component(ent, InventoryComp):
+            inv = esper.component_for_entity(ent, InventoryComp)
+            char["inventory"] = []
+            for item in inv.items:
+                item_data = {
+                    "item_id": item.item_id if hasattr(item, 'item_id') else str(item),
+                    "quantity": getattr(item, 'quantity', 1)
+                }
+                char["inventory"].append(item_data)
+        
+        # Save equipment
+        if esper.has_component(ent, Equipment):
+            equip = esper.component_for_entity(ent, Equipment)
+            char["equipment"] = {}
+            for slot in ['head', 'chest', 'hands', 'legs', 'feet', 'main_hand', 'off_hand', 'amulet', 'ring_1', 'ring_2']:
+                item = equip.get(slot)
+                if item:
+                    char["equipment"][slot] = item if isinstance(item, str) else (item.item_id if hasattr(item, 'item_id') else str(item))
+        
         return char
     
     def _restore_save_data(self, data: Dict[str, Any]):
@@ -264,6 +284,25 @@ class SaveLoadProcessor(esper.Processor):
         if "spells" in data and esper.has_component(ent, SpellBook):
             spellbook = esper.component_for_entity(ent, SpellBook)
             spellbook.known_spells = list(data["spells"])  # Keep as list to preserve order
+        
+        # Restore inventory
+        if "inventory" in data and esper.has_component(ent, InventoryComp):
+            from ..components.equipment import InventoryItem
+            inv = esper.component_for_entity(ent, InventoryComp)
+            inv.items = []
+            for item_data in data["inventory"]:
+                item = InventoryItem(
+                    item_id=item_data["item_id"],
+                    quantity=item_data.get("quantity", 1)
+                )
+                inv.items.append(item)
+        
+        # Restore equipment
+        if "equipment" in data and esper.has_component(ent, Equipment):
+            equip = esper.component_for_entity(ent, Equipment)
+            for slot, item_id in data["equipment"].items():
+                if item_id:
+                    equip.equip(slot, item_id)
     
     def has_save_file(self) -> bool:
         """Check if a save file exists."""

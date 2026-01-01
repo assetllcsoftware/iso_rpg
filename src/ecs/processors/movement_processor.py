@@ -13,7 +13,7 @@ from typing import Optional, List, Tuple
 from ..components import (
     Position, Velocity, Speed, MoveIntent, TargetPosition, Path,
     CollisionRadius, Facing, Direction, StatusEffects, Dead, Downed,
-    PlayerControlled, Selected, PartyMember, Enemy
+    PlayerControlled, Selected, PartyMember, Enemy, Projectile
 )
 from ...core.events import EventBus, Event, EventType
 from ...core.formulas import distance
@@ -182,6 +182,12 @@ class MovementProcessor(esper.Processor):
                 continue
             
             if vel.dx == 0 and vel.dy == 0:
+                continue
+            
+            # Projectiles fly freely - no ground collision (handled by MagicProcessor)
+            if esper.has_component(ent, Projectile):
+                pos.x += vel.dx * dt
+                pos.y += vel.dy * dt
                 continue
             
             # Get collision radius

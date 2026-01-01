@@ -10,9 +10,10 @@ from ..core.constants import (
     COLOR_TEXT, COLOR_TEXT_DIM
 )
 from ..core.events import EventBus, Event, EventType
+from ..core.formulas import xp_for_skill_level
 from ..ecs.components import (
     Health, Mana, Gold, CharacterName, CharacterLevel,
-    SkillLevels, SpellBook, Equipment, Inventory,
+    SkillLevels, SkillXP, SpellBook, Equipment, Inventory,
     PartyMember, PlayerControlled, Selected
 )
 from .icons import icon_generator
@@ -78,7 +79,8 @@ class HUD:
         """Render the town portal button."""
         # Position below party portraits (after up to 3 members)
         num_members = sum(1 for _ in esper.get_components(PartyMember, Health))
-        y = 20 + num_members * 90 + 10
+        panel_height = 115 + 5  # Match _render_party_portraits
+        y = 20 + num_members * panel_height + 10
         
         self.portal_button_rect = pygame.Rect(20, y, 60, 60)
         
@@ -122,19 +124,20 @@ class HUD:
     def _render_party_portraits(self):
         """Render party member portraits and status."""
         y_offset = 20
+        panel_height = 115  # Taller to fit XP bars
         
         for ent, (member, health) in esper.get_components(PartyMember, Health):
             x = 20
-            y = y_offset + member.party_index * 90
+            y = y_offset + member.party_index * (panel_height + 5)
             
             # Background
             bg_color = COLOR_UI_BG if not esper.has_component(ent, Selected) else (45, 42, 55)
-            pygame.draw.rect(self.screen, bg_color, (x, y, 200, 80))
-            pygame.draw.rect(self.screen, COLOR_UI_BORDER, (x, y, 200, 80), 2)
+            pygame.draw.rect(self.screen, bg_color, (x, y, 200, panel_height))
+            pygame.draw.rect(self.screen, COLOR_UI_BORDER, (x, y, 200, panel_height), 2)
             
             # Selection indicator
             if esper.has_component(ent, Selected):
-                pygame.draw.rect(self.screen, COLOR_UI_ACCENT, (x, y, 4, 80))
+                pygame.draw.rect(self.screen, COLOR_UI_ACCENT, (x, y, 4, panel_height))
             
             # Name
             name = "Hero"
@@ -181,6 +184,60 @@ class HUD:
                 mana_w = int(bar_w * mana.percent)
                 pygame.draw.rect(self.screen, COLOR_MANA, (bar_x, bar_y, mana_w, bar_h))
                 pygame.draw.rect(self.screen, COLOR_UI_BORDER, (bar_x, bar_y, bar_w, bar_h), 1)
+            
+            # Skill XP bars (compact 2x2 grid)
+            self._render_skill_xp_bars(ent, x + 8, y + 68)
+    
+    def _render_skill_xp_bars(self, ent: int, x: int, y: int):
+        """Render compact skill XP bars for a character."""
+        # Get skill levels and XP
+        skill_levels = None
+        skill_xp = None
+        if esper.has_component(ent, SkillLevels):
+            skill_levels = esper.component_for_entity(ent, SkillLevels)
+        if esper.has_component(ent, SkillXP):
+            skill_xp = esper.component_for_entity(ent, SkillXP)
+        
+        if not skill_levels or not skill_xp:
+            return
+        
+        # Skill colors and names (compact labels)
+        skills = [
+            ("melee", "M", (200, 80, 80)),     # Red
+            ("ranged", "R", (80, 180, 80)),    # Green  
+            ("combat_magic", "C", (100, 100, 220)),  # Blue
+            ("nature_magic", "N", (80, 200, 180)),   # Teal
+        ]
+        
+        bar_w = 90
+        bar_h = 8
+        
+        for i, (skill_name, label, color) in enumerate(skills):
+            # 2x2 grid layout
+            col = i % 2
+            row = i // 2
+            bx = x + col * 95
+            by = y + row * 18
+            
+            level = skill_levels.get(skill_name)
+            xp = skill_xp.get(skill_name)
+            xp_needed = xp_for_skill_level(level)
+            progress = min(1.0, xp / xp_needed) if xp_needed > 0 else 0
+            
+            # Background
+            pygame.draw.rect(self.screen, (30, 30, 35), (bx, by, bar_w, bar_h))
+            
+            # Progress fill
+            fill_w = int(bar_w * progress)
+            pygame.draw.rect(self.screen, color, (bx, by, fill_w, bar_h))
+            
+            # Border
+            pygame.draw.rect(self.screen, (60, 60, 70), (bx, by, bar_w, bar_h), 1)
+            
+            # Label and level
+            label_text = f"{label}:{level}"
+            label_surf = self.font_small.render(label_text, True, COLOR_TEXT)
+            self.screen.blit(label_surf, (bx + 2, by - 1))
     
     def _render_spell_bars(self):
         """Render spell bars at bottom center - one row per party member."""

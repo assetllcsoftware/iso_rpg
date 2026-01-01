@@ -103,12 +103,15 @@ def create_character(
         StatusEffects(),
     )
     
-    # Player-controlled or ally?
-    if data.get("is_player_controlled", False) or party_index == 0:
-        esper.add_component(entity, PlayerControlled())
+    # All party members can be player-controlled (when selected)
+    esper.add_component(entity, PlayerControlled())
+    
+    # Only first party member starts selected
+    if party_index == 0:
         esper.add_component(entity, Selected())
-    else:
-        # Ally AI
+    
+    # Non-leader party members also get AI for when they're not selected
+    if party_index > 0:
         offset = data.get("formation_offset", [1.5, 0.5])
         esper.add_component(entity, Ally())
         esper.add_component(entity, AllyAI(

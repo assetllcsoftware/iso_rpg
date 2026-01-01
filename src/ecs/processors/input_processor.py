@@ -102,6 +102,12 @@ class InputProcessor(esper.Processor):
             self.event_bus.emit(Event(EventType.TOWN_ENTERED, {"from_level": 1}))
         elif key == pygame.K_TAB:
             self._cycle_character_selection()
+        elif key == pygame.K_F1:
+            self._select_party_member(0)  # Select Hero
+        elif key == pygame.K_F2:
+            self._select_party_member(1)  # Select Lyra
+        elif key == pygame.K_F3:
+            self._select_party_member(2)  # Select 3rd party member (if exists)
         elif key == pygame.K_1:
             # 1 = Health potion
             self._use_action_bar_slot(0)

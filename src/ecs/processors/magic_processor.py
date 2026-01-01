@@ -8,7 +8,7 @@ from ..components import (
     Position, Velocity, Health, Mana, Facing, Direction,
     SpellBook, CastIntent, Casting, Projectile, AreaEffect,
     StatusEffect, StatusEffects, ActiveAbility, LeapingAbility,
-    GlobalCooldown,
+    GlobalCooldown, CharacterName,
     Attributes, SkillLevels, SkillXP,
     Animation, AnimationState, VisualEffect, RenderOffset,
     PartyMember, Enemy, Downed, Dead,
@@ -63,7 +63,7 @@ class MagicProcessor(esper.Processor):
     def _on_cast_requested(self, event: Event):
         """Handle spell cast request from input."""
         caster = event.data.get("caster", -1)
-        slot = event.data.get("slot", 0)
+        slot = event.data.get("slot", -1)  # -1 means use spell_id directly
         target_id = event.data.get("target_id", -1)
         target_x = event.data.get("target_x", 0.0)
         target_y = event.data.get("target_y", 0.0)
@@ -84,10 +84,17 @@ class MagicProcessor(esper.Processor):
         spellbook = esper.component_for_entity(caster, SpellBook)
         spells = list(spellbook.known_spells)
         
-        if slot >= len(spells):
-            return
-        
-        spell_id = spells[slot]
+        # Determine spell_id - either from slot (player input) or directly (AI)
+        spell_id = event.data.get("spell_id", None)
+        if spell_id is None:
+            # Player input uses slot
+            if slot < 0 or slot >= len(spells):
+                return
+            spell_id = spells[slot]
+        else:
+            # AI provides spell_id directly - validate it's known
+            if spell_id not in spellbook.known_spells:
+                return
         
         # Set cast intent
         if esper.has_component(caster, CastIntent):
@@ -1331,6 +1338,19 @@ class MagicProcessor(esper.Processor):
 
     def _apply_spell_damage(self, caster: int, target: int, spell_data: dict):
         """Apply spell damage to a target."""
+        # Skip if caster and target are same faction (no friendly fire)
+        caster_is_player = esper.has_component(caster, PartyMember)
+        target_is_player = esper.has_component(target, PartyMember)
+        
+        if caster_is_player and target_is_player:
+            return  # Don't hurt allies
+        
+        caster_is_enemy = esper.has_component(caster, Enemy)
+        target_is_enemy = esper.has_component(target, Enemy)
+        
+        if caster_is_enemy and target_is_enemy:
+            return  # Enemies don't hurt each other
+        
         damage = spell_data.get("damage", 20)
         damage_type = spell_data.get("damage_type", "fire")
         
@@ -1376,15 +1396,23 @@ class MagicProcessor(esper.Processor):
         }))
     
     def _update_projectiles(self, dt: float):
-        """Update projectile positions and check for hits."""
+        """Update projectile positions and check for hits.
+        
+        NOTE: Projectiles fly freely - MovementProcessor skips collision for them.
+        Wall collision is handled HERE, not in MovementProcessor.
+        PositionValidator also skips projectiles.
+        See docs/PROCESSOR_FLOW.md for details.
+        """
         for ent, (pos, vel, proj) in esper.get_components(Position, Velocity, Projectile):
             # Check if projectile hit a wall
             if self.dungeon and not self.dungeon.is_walkable(int(pos.x), int(pos.y)):
-                # Hit a wall - destroy projectile
                 esper.add_component(ent, ToRemove())
                 continue
             
-            # Homing: Update velocity to track target
+            # Determine caster's faction to know what we can hit
+            caster_is_player = esper.has_component(proj.caster_id, PartyMember) if esper.entity_exists(proj.caster_id) else False
+            
+            # Homing: Update velocity to track target if it exists
             if proj.target_id >= 0 and esper.entity_exists(proj.target_id):
                 target_pos = esper.component_for_entity(proj.target_id, Position)
                 dist = distance(pos.x, pos.y, target_pos.x, target_pos.y)
@@ -1396,8 +1424,8 @@ class MagicProcessor(esper.Processor):
                     vel.dx = (dx / dist) * proj.speed
                     vel.dy = (dy / dist) * proj.speed
                 
-                # Check for hit
-                if dist < 0.6:  # Hit!
+                # Check for hit on intended target
+                if dist < 0.6:
                     spell_data = data_loader.get_spell(proj.spell_id) or {}
                     spell_data["damage"] = proj.damage
                     spell_data["damage_type"] = proj.damage_type
@@ -1417,10 +1445,25 @@ class MagicProcessor(esper.Processor):
                     esper.add_component(ent, ToRemove())
                     continue
             else:
-                # Ground-targeted - check if reached destination
+                # Target died or doesn't exist - check for collision with any valid enemy
+                hit_entity = self._check_projectile_collision(pos, proj.caster_id, caster_is_player)
+                if hit_entity:
+                    spell_data = data_loader.get_spell(proj.spell_id) or {}
+                    spell_data["damage"] = proj.damage
+                    spell_data["damage_type"] = proj.damage_type
+                    self._apply_spell_damage(proj.caster_id, hit_entity, spell_data)
+                    
+                    esper.create_entity(
+                        Position(x=pos.x, y=pos.y),
+                        VisualEffect(effect_type=f"hit_{proj.damage_type}", timer=0.3)
+                    )
+                    
+                    esper.add_component(ent, ToRemove())
+                    continue
+                
+                # Check if reached destination
                 dist = distance(pos.x, pos.y, proj.target_x, proj.target_y)
                 if dist < 0.5:
-                    # Create impact effect for ground-targeted spells
                     esper.create_entity(
                         Position(x=pos.x, y=pos.y),
                         VisualEffect(effect_type=f"impact_{proj.damage_type}", timer=0.4)
@@ -1432,6 +1475,25 @@ class MagicProcessor(esper.Processor):
             proj.lifetime = getattr(proj, 'lifetime', 5.0) - dt
             if proj.lifetime <= 0:
                 esper.add_component(ent, ToRemove())
+    
+    def _check_projectile_collision(self, proj_pos: Position, caster_id: int, caster_is_player: bool) -> Optional[int]:
+        """Check if projectile hits any valid target. Returns entity ID or None."""
+        hit_radius = 0.6
+        
+        # If caster is player, we can hit enemies
+        if caster_is_player:
+            for enemy_ent, (enemy_pos, _) in esper.get_components(Position, Enemy):
+                dist = distance(proj_pos.x, proj_pos.y, enemy_pos.x, enemy_pos.y)
+                if dist < hit_radius:
+                    return enemy_ent
+        else:
+            # Enemy projectile can hit players
+            for player_ent, (player_pos, _) in esper.get_components(Position, PartyMember):
+                dist = distance(proj_pos.x, proj_pos.y, player_pos.x, player_pos.y)
+                if dist < hit_radius:
+                    return player_ent
+        
+        return None
     
     def _update_area_effects(self, dt: float):
         """Update persistent area effects."""

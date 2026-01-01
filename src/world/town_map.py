@@ -155,4 +155,8 @@ class TownMap:
     def has_line_of_sight(self, x1: float, y1: float, x2: float, y2: float) -> bool:
         """Always return True in town (no combat)."""
         return True
+    
+    def get_player_spawn(self) -> Tuple[float, float]:
+        """Return the spawn point for players entering town."""
+        return (float(self.spawn_point[0]), float(self.spawn_point[1]))
 

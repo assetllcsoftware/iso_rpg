@@ -21,6 +21,7 @@ class InventoryUI:
     def __init__(self, screen: pygame.Surface):
         self.screen = screen
         self.visible = False
+        self.sell_mode = False  # When True, used by ShopUI for selling
         self.selected_entity: int = -1
         self.selected_item_idx: int = -1
         self.hover_item_idx: int = -1

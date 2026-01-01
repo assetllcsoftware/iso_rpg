@@ -16,7 +16,7 @@ from .ecs.processors import (
     SaveLoadProcessor, WorldProcessor, DroppedItemProcessor
 )
 from .ecs.factories import create_party, create_enemies_for_level
-from .ecs.components import PartyMember, Position
+from .ecs.components import PartyMember, Position, Selected, Downed, CharacterName
 
 from .world import Dungeon, Pathfinder
 from .rendering import Camera, Renderer
@@ -163,6 +163,7 @@ class Game:
         self.event_bus.subscribe(EventType.TOWN_ENTERED, self._on_town_entered)
         self.event_bus.subscribe(EventType.TOWN_LEFT, self._on_town_left)
         self.event_bus.subscribe(EventType.GAME_LOADED, self._on_game_loaded)
+        self.event_bus.subscribe(EventType.CHARACTER_SELECTED, self._on_character_selected)
     
     def _on_pause(self, event):
         """Handle pause event."""
@@ -252,11 +253,23 @@ class Game:
         """Handle menu open events."""
         menu = event.data.get("menu", "")
         if menu == "inventory":
-            self.inventory_ui.toggle()
-            self.state = GameState.INVENTORY if self.inventory_ui.visible else GameState.PLAYING
+            if not self.inventory_ui.visible:
+                # Opening - remember current state
+                self._state_before_menu = self.state
+                self.inventory_ui.toggle()
+                self.state = GameState.INVENTORY
+            else:
+                # Closing - restore previous state
+                self.inventory_ui.toggle()
+                self.state = getattr(self, '_state_before_menu', GameState.PLAYING)
         elif menu == "skill_tree":
-            self.skill_tree_ui.toggle()
-            self.state = GameState.SKILL_TREE if self.skill_tree_ui.visible else GameState.PLAYING
+            if not self.skill_tree_ui.visible:
+                self._state_before_menu = self.state
+                self.skill_tree_ui.toggle()
+                self.state = GameState.SKILL_TREE
+            else:
+                self.skill_tree_ui.toggle()
+                self.state = getattr(self, '_state_before_menu', GameState.PLAYING)
     
     def _on_action_bar_used(self, event):
         """Handle action bar slot use."""
@@ -275,6 +288,67 @@ class Game:
             f"{skill.title()} Level {new_level}!",
             (255, 255, 100)
         )
+    
+    def _on_character_selected(self, event):
+        """Handle character selection (Tab key)."""
+        # Get all party members sorted by index
+        party = []
+        for ent, (member,) in esper.get_components(PartyMember):
+            party.append((member.party_index, ent))
+        party.sort()
+        
+        if not party:
+            return
+        
+        # Find currently selected
+        current_idx = 0
+        for i, (_, ent) in enumerate(party):
+            if esper.has_component(ent, Selected):
+                current_idx = i
+                break
+        
+        # Determine new selection
+        if event.data.get("cycle"):
+            # Cycle to next party member (wrap around)
+            new_idx = (current_idx + 1) % len(party)
+        else:
+            # Select by party_index
+            target_party_idx = event.data.get("party_index", 0)
+            new_idx = 0
+            for i, (pidx, _) in enumerate(party):
+                if pidx == target_party_idx:
+                    new_idx = i
+                    break
+        
+        # Move Selected component
+        old_ent = party[current_idx][1]
+        new_ent = party[new_idx][1]
+        
+        if old_ent != new_ent:
+            # Remove from old
+            if esper.has_component(old_ent, Selected):
+                esper.remove_component(old_ent, Selected)
+            
+            # Add to new
+            if not esper.has_component(new_ent, Selected):
+                esper.add_component(new_ent, Selected())
+            
+            # Get character name for notification
+            name = "Character"
+            if esper.has_component(new_ent, CharacterName):
+                name = esper.component_for_entity(new_ent, CharacterName).name
+            
+            # Check if downed
+            status = ""
+            if esper.has_component(new_ent, Downed):
+                status = " (Downed)"
+            
+            self.notifications.add(f"Controlling {name}{status}", (150, 200, 255))
+            
+            # Center camera on new character
+            if esper.has_component(new_ent, Position):
+                pos = esper.component_for_entity(new_ent, Position)
+                self.camera.center_on(pos.x, pos.y)
     
     def _restart_game(self):
         """Restart the game."""
@@ -306,14 +380,31 @@ class Game:
         self.town_scene.show(dungeon_level=self.current_level)
     
     def _on_town_left(self, event):
-        """Handle leaving town."""
-        self.town_scene.hide()
-        target_level = event.data.get("target_level", 1)
+        """Handle leaving town - restore positions, don't regenerate."""
+        # IMPORTANT: Set dungeon references BEFORE restoring positions
+        # Otherwise PositionValidator might see dungeon positions as invalid
+        # when checked against town_map
+        self.movement_processor.set_dungeon(self.dungeon)
+        self.input_processor.set_dungeon(self.dungeon)
+        self.position_validator.set_dungeon(self.dungeon)
+        self.ai_processor.set_dungeon(self.dungeon)
+        self.combat_processor.set_dungeon(self.dungeon)
+        self.magic_processor.set_dungeon(self.dungeon)
         
-        # Always regenerate the level when leaving town to ensure clean state
-        self.current_level = target_level
-        self._generate_new_level()
+        # Now restore positions (they'll be valid against dungeon)
+        self.town_scene.hide()  # This calls _restore_positions()
         self.state = GameState.PLAYING
+        
+        # Center camera on restored position
+        for ent, (member, pos) in esper.get_components(PartyMember, Position):
+            if member.party_index == 0:
+                self.camera.center_on(pos.x, pos.y)
+                break
+        
+        self.event_bus.emit(Event(EventType.NOTIFICATION, {
+            "text": f"Returned to Dungeon Level {self.current_level}",
+            "color": (150, 200, 255)
+        }))
     
     def _on_game_loaded(self, event):
         """Handle game loaded - regenerate dungeon with saved seed and restore state."""
@@ -322,6 +413,10 @@ class Game:
             Attributes, SkillLevels, SkillXP, CharacterLevel, SpellBook, Enemy
         )
         from .ecs.factories import create_enemies_for_level
+        
+        # If in town, exit town first
+        if self.state == GameState.TOWN:
+            self.town_scene.hide()
         
         dungeon_level = event.data.get("dungeon_level", 1)
         dungeon_seed = event.data.get("dungeon_seed")
@@ -443,6 +538,29 @@ class Game:
             if "spells" in char_data and esper.has_component(ent, SpellBook):
                 spellbook = esper.component_for_entity(ent, SpellBook)
                 spellbook.known_spells = list(char_data["spells"])
+            
+            # Restore inventory
+            if "inventory" in char_data:
+                from .ecs.components import Inventory as InventoryComp
+                from .ecs.components.equipment import InventoryItem
+                if esper.has_component(ent, InventoryComp):
+                    inv = esper.component_for_entity(ent, InventoryComp)
+                    inv.items = []
+                    for item_data in char_data["inventory"]:
+                        item = InventoryItem(
+                            item_id=item_data["item_id"],
+                            quantity=item_data.get("quantity", 1)
+                        )
+                        inv.items.append(item)
+            
+            # Restore equipment
+            if "equipment" in char_data:
+                from .ecs.components import Equipment
+                if esper.has_component(ent, Equipment):
+                    equip = esper.component_for_entity(ent, Equipment)
+                    for slot, item_id in char_data["equipment"].items():
+                        if item_id:
+                            equip.equip(slot, item_id)
         
         # Restore gold
         for ent, (_, gold) in esper.get_components(PartyMember, Gold):
@@ -453,6 +571,9 @@ class Game:
         for ent, (pos, _, _) in esper.get_components(Position, PlayerControlled, Selected):
             self.camera.center_on(pos.x, pos.y)
             break
+        
+        # Ensure we're in playing state after loading
+        self.state = GameState.PLAYING
     
     def _generate_new_level(self):
         """Generate a new dungeon level, preserving party."""
@@ -712,13 +833,15 @@ class Game:
             if self.state == GameState.INVENTORY:
                 if self.inventory_ui.handle_event(event):
                     if not self.inventory_ui.visible:
-                        self.state = GameState.PLAYING
+                        # Restore previous state (TOWN or PLAYING)
+                        self.state = getattr(self, '_state_before_menu', GameState.PLAYING)
                     continue
             
             if self.state == GameState.SKILL_TREE:
                 if self.skill_tree_ui.handle_event(event):
                     if not self.skill_tree_ui.visible:
-                        self.state = GameState.PLAYING
+                        # Restore previous state (TOWN or PLAYING)
+                        self.state = getattr(self, '_state_before_menu', GameState.PLAYING)
                     continue
             
             if self.state == GameState.TOWN:
@@ -769,14 +892,22 @@ class Game:
     
     def _render(self, dt: float):
         """Render the game."""
-        # Town uses same renderer/camera as dungeon
-        if self.state == GameState.TOWN:
-            self.town_scene.render(self.renderer, self.camera)
-            self.notifications.render()
-            return
+        # Determine what background to render
+        # If in a menu (inventory/skill tree), use the previous state
+        background_state = self.state
+        if self.state in (GameState.INVENTORY, GameState.SKILL_TREE):
+            background_state = getattr(self, '_state_before_menu', GameState.PLAYING)
         
-        # Render dungeon world and entities
-        self.renderer.render(self.dungeon)
+        # Town uses same renderer/camera as dungeon
+        if background_state == GameState.TOWN:
+            self.town_scene.render(self.renderer, self.camera)
+            # If we're in inventory/skill tree in town, continue to render those overlays
+            if self.state == GameState.TOWN:
+                self.notifications.render()
+                return
+        else:
+            # Render dungeon world and entities
+            self.renderer.render(self.dungeon)
         
         # Render HUD elements when not in full-screen menus
         if self.state != GameState.GAME_OVER:
