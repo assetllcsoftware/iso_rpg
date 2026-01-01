@@ -93,6 +93,13 @@ class InputProcessor(esper.Processor):
             self.event_bus.emit(Event(EventType.MENU_OPENED, {"menu": "skill_tree"}))
         elif key == pygame.K_m:
             self.event_bus.emit(Event(EventType.MENU_OPENED, {"menu": "map"}))
+        elif key == pygame.K_h:
+            # Town portal - go home!
+            self.event_bus.emit(Event(EventType.NOTIFICATION, {
+                "text": "Town Portal activated!",
+                "color": (100, 200, 255)
+            }))
+            self.event_bus.emit(Event(EventType.TOWN_ENTERED, {"from_level": 1}))
         elif key == pygame.K_TAB:
             self._cycle_character_selection()
         elif key == pygame.K_1:
@@ -291,10 +298,21 @@ class InputProcessor(esper.Processor):
             return self.camera.screen_to_world(screen_pos[0], screen_pos[1])
         return (0.0, 0.0)
     
-    def _get_entity_at(self, world_x: float, world_y: float) -> int:
-        """Get entity ID at world position, or -1 if none."""
+    def _get_entity_at(self, world_x: float, world_y: float, require_enemy: bool = False) -> int:
+        """Get entity ID at world position, or -1 if none.
+        
+        Args:
+            world_x, world_y: World coordinates to check
+            require_enemy: If True, only return enemies (for player attack targeting)
+        """
         from ...core.formulas import distance
         from ..components import Health, CollisionRadius
+        
+        # Get the currently selected player's position for LOS check
+        player_pos = None
+        for ent, (pos, _, _) in esper.get_components(Position, PlayerControlled, Selected):
+            player_pos = pos
+            break
         
         closest = -1
         closest_dist = 2.0  # Max click radius (2 tiles - generous for clicking)
@@ -303,6 +321,17 @@ class InputProcessor(esper.Processor):
             # Skip entities without health (probably not targetable)
             if not esper.has_component(ent, Health):
                 continue
+            
+            # If requiring enemies, skip non-enemies
+            if require_enemy and not esper.has_component(ent, Enemy):
+                continue
+            
+            # Check line of sight from player to target
+            if player_pos:
+                if not self.dungeon:
+                    print(f"[WARNING] InputProcessor.dungeon is None! Targeting not blocked by walls!")
+                elif not self.dungeon.has_line_of_sight(player_pos.x, player_pos.y, pos.x, pos.y):
+                    continue  # Can't target through walls
             
             # Get collision radius for better clicking
             entity_radius = 0.5
@@ -368,10 +397,11 @@ class InputProcessor(esper.Processor):
                 else:
                     esper.add_component(ent, TargetPosition(x=world_x, y=world_y))
             
-            # Left-click to attack
+            # Left-click to attack (only enemies, must have LOS)
             if self.mouse_clicked[0]:  # Left click
                 world_x, world_y = self._screen_to_world(self.mouse_pos)
-                target_id = self._get_entity_at(world_x, world_y)
+                # require_enemy=True ensures we only target enemies
+                target_id = self._get_entity_at(world_x, world_y, require_enemy=True)
                 
                 if target_id >= 0 and target_id != ent:
                     if esper.has_component(ent, AttackIntent):

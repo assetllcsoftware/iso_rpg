@@ -5,7 +5,6 @@ import esper
 from typing import Optional, Tuple
 
 from ..core.constants import (
-    SCREEN_WIDTH, SCREEN_HEIGHT,
     COLOR_UI_BG, COLOR_UI_BORDER,
     TILE_WIDTH, TILE_HEIGHT
 )
@@ -19,7 +18,7 @@ class Minimap:
         self.screen = screen
         self.size = size
         self.surface = pygame.Surface((size, size))
-        self.x = SCREEN_WIDTH - size - 20
+        self.x = self.screen.get_width() - size - 20
         self.y = 20
         
         # Colors

@@ -128,9 +128,9 @@ class AIProcessor(esper.Processor):
                 target_pos = esper.component_for_entity(ai.target_id, Position)
                 
                 # Check line of sight - can't attack through walls
-                if self.dungeon and not self.dungeon.has_line_of_sight(
-                    pos.x, pos.y, target_pos.x, target_pos.y
-                ):
+                if not self.dungeon:
+                    print(f"[WARNING] AIProcessor.dungeon is None! Enemy attack LOS not checked!")
+                elif not self.dungeon.has_line_of_sight(pos.x, pos.y, target_pos.x, target_pos.y):
                     # Lost sight - try to chase around obstacles
                     ai.state = AIState.CHASE
                     continue
@@ -220,7 +220,9 @@ class AIProcessor(esper.Processor):
                 # Get enemy position for LOS check
                 enemy_pos = esper.component_for_entity(nearest_enemy, Position)
                 has_los = True
-                if self.dungeon:
+                if not self.dungeon:
+                    print(f"[WARNING] AIProcessor.dungeon is None! Ally engage LOS not checked!")
+                else:
                     has_los = self.dungeon.has_line_of_sight(
                         pos.x, pos.y, enemy_pos.x, enemy_pos.y
                     )
@@ -380,10 +382,25 @@ class AIProcessor(esper.Processor):
         if not spell_data:
             return
         
-        # Get target position
+        # Get caster and target positions
+        if not esper.has_component(caster, Position):
+            return
         if not esper.has_component(target, Position):
             return
+        caster_pos = esper.component_for_entity(caster, Position)
         target_pos = esper.component_for_entity(target, Position)
+        
+        # Check spell range - don't cast if target is too far
+        spell_range = spell_data.get('range', 8.0)
+        dist_to_target = distance(caster_pos.x, caster_pos.y, target_pos.x, target_pos.y)
+        if dist_to_target > spell_range:
+            return  # Target out of range
+        
+        # Check LOS one more time right before casting
+        if self.dungeon and not self.dungeon.has_line_of_sight(
+            caster_pos.x, caster_pos.y, target_pos.x, target_pos.y
+        ):
+            return  # Lost LOS
         
         # Emit spell cast event
         self.event_bus.emit(Event(EventType.SPELL_CAST_REQUESTED, {
@@ -412,12 +429,10 @@ class AIProcessor(esper.Processor):
                 continue
             
             # Check line of sight - can't target through walls
-            if self.dungeon:
-                if not self.dungeon.has_line_of_sight(
-                    int(pos.x), int(pos.y),
-                    int(member_pos.x), int(member_pos.y)
-                ):
-                    continue
+            if not self.dungeon:
+                print(f"[WARNING] AIProcessor.dungeon is None! Enemy targeting not blocked!")
+            elif not self.dungeon.has_line_of_sight(pos.x, pos.y, member_pos.x, member_pos.y):
+                continue
             
             dist = distance(pos.x, pos.y, member_pos.x, member_pos.y)
             if dist < nearest_dist:
@@ -436,12 +451,10 @@ class AIProcessor(esper.Processor):
                 continue
             
             # Check line of sight if we have a dungeon
-            if self.dungeon:
-                if not self.dungeon.has_line_of_sight(
-                    int(pos.x), int(pos.y),
-                    int(enemy_pos.x), int(enemy_pos.y)
-                ):
-                    continue
+            if not self.dungeon:
+                print(f"[WARNING] AIProcessor.dungeon is None! Ally targeting not blocked!")
+            elif not self.dungeon.has_line_of_sight(pos.x, pos.y, enemy_pos.x, enemy_pos.y):
+                continue
             
             dist = distance(pos.x, pos.y, enemy_pos.x, enemy_pos.y)
             if dist < nearest_dist:

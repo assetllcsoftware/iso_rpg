@@ -4,7 +4,7 @@ import pygame
 from typing import List, Tuple, Optional
 from dataclasses import dataclass
 
-from ..core.constants import SCREEN_WIDTH, SCREEN_HEIGHT, COLOR_TEXT
+from ..core.constants import COLOR_TEXT
 
 
 @dataclass
@@ -57,7 +57,7 @@ class NotificationManager:
         if not self.notifications:
             return
         
-        base_y = SCREEN_HEIGHT // 3
+        base_y = self.screen.get_height() // 3
         
         for i, notification in enumerate(self.notifications[-self.max_notifications:]):
             y = base_y + i * 30 - int(notification.y_offset)
@@ -70,13 +70,13 @@ class NotificationManager:
             # Shadow
             shadow_surf = self.font_shadow.render(notification.text, True, (0, 0, 0))
             shadow_surf.set_alpha(alpha)
-            shadow_rect = shadow_surf.get_rect(center=(SCREEN_WIDTH // 2 + 2, y + 2))
+            shadow_rect = shadow_surf.get_rect(center=(self.screen.get_width() // 2 + 2, y + 2))
             self.screen.blit(shadow_surf, shadow_rect)
             
             # Text
             text_surf = self.font.render(notification.text, True, notification.color)
             text_surf.set_alpha(alpha)
-            text_rect = text_surf.get_rect(center=(SCREEN_WIDTH // 2, y))
+            text_rect = text_surf.get_rect(center=(self.screen.get_width() // 2, y))
             self.screen.blit(text_surf, text_rect)
     
     def clear(self):

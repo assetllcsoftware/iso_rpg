@@ -5,7 +5,6 @@ import esper
 from typing import Optional, List, Dict, Tuple
 
 from ..core.constants import (
-    SCREEN_WIDTH, SCREEN_HEIGHT,
     COLOR_UI_BG, COLOR_UI_BORDER, COLOR_UI_ACCENT,
     COLOR_HEALTH, COLOR_MANA, COLOR_XP, COLOR_TEXT, COLOR_TEXT_DIM, COLOR_GOLD,
     RARITY_COLORS, RARITY_NAMES
@@ -46,16 +45,9 @@ class InventoryUI:
         self.slot_size = 48
         self.padding = 12
         
-        # Panel positions
-        self.left_panel = pygame.Rect(
-            50, (SCREEN_HEIGHT - self.panel_height) // 2,
-            self.panel_width, self.panel_height
-        )
-        self.right_panel = pygame.Rect(
-            SCREEN_WIDTH - self.panel_width - 50,
-            (SCREEN_HEIGHT - self.panel_height) // 2,
-            self.panel_width, self.panel_height
-        )
+        # Panel positions (calculated dynamically in render)
+        self.left_panel = pygame.Rect(0, 0, self.panel_width, self.panel_height)
+        self.right_panel = pygame.Rect(0, 0, self.panel_width, self.panel_height)
         
         # Equipment slot positions
         self.equip_slots = self._setup_equip_slots()
@@ -356,8 +348,26 @@ class InventoryUI:
         if not self.visible:
             return
         
+        # Update panel positions based on actual screen size
+        screen_w = self.screen.get_width()
+        screen_h = self.screen.get_height()
+        
+        self.left_panel = pygame.Rect(
+            50, (screen_h - self.panel_height) // 2,
+            self.panel_width, self.panel_height
+        )
+        self.right_panel = pygame.Rect(
+            screen_w - self.panel_width - 50,
+            (screen_h - self.panel_height) // 2,
+            self.panel_width, self.panel_height
+        )
+        
+        # Re-setup equipment slots and inventory slots with new positions
+        self.equip_slots = self._setup_equip_slots()
+        self._setup_inv_slots()
+        
         # Darken background
-        overlay = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT), pygame.SRCALPHA)
+        overlay = pygame.Surface((screen_w, screen_h), pygame.SRCALPHA)
         overlay.fill((0, 0, 0, 180))
         self.screen.blit(overlay, (0, 0))
         
@@ -673,8 +683,8 @@ class InventoryUI:
         width = max(self.font_small.size(line)[0] for line in lines) + 20
         height = len(lines) * 18 + 10
         
-        x = min(mouse_pos[0] + 15, SCREEN_WIDTH - width - 10)
-        y = min(mouse_pos[1] + 15, SCREEN_HEIGHT - height - 10)
+        x = min(mouse_pos[0] + 15, self.screen.get_width() - width - 10)
+        y = min(mouse_pos[1] + 15, self.screen.get_height() - height - 10)
         
         tooltip_rect = pygame.Rect(x, y, width, height)
         pygame.draw.rect(self.screen, (20, 18, 25), tooltip_rect)
@@ -704,8 +714,8 @@ class InventoryUI:
             width = text.get_width() + 20
             height = 24
             
-            x = min(mouse_pos[0] + 15, SCREEN_WIDTH - width - 10)
-            y = min(mouse_pos[1] + 15, SCREEN_HEIGHT - height - 10)
+            x = min(mouse_pos[0] + 15, self.screen.get_width() - width - 10)
+            y = min(mouse_pos[1] + 15, self.screen.get_height() - height - 10)
             
             pygame.draw.rect(self.screen, (20, 18, 25), (x, y, width, height))
             pygame.draw.rect(self.screen, COLOR_UI_BORDER, (x, y, width, height), 1)
@@ -747,8 +757,8 @@ class InventoryUI:
         width = max(self.font_small.size(line)[0] for line in lines) + 20
         height = len(lines) * 18 + 10
         
-        x = min(mouse_pos[0] + 15, SCREEN_WIDTH - width - 10)
-        y = min(mouse_pos[1] + 15, SCREEN_HEIGHT - height - 10)
+        x = min(mouse_pos[0] + 15, self.screen.get_width() - width - 10)
+        y = min(mouse_pos[1] + 15, self.screen.get_height() - height - 10)
         
         tooltip_rect = pygame.Rect(x, y, width, height)
         pygame.draw.rect(self.screen, (20, 18, 25), tooltip_rect)

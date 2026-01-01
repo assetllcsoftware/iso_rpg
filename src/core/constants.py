@@ -20,9 +20,9 @@ TILE_HEIGHT = 32
 WALL_HEIGHT = 32
 
 # Camera
-CAMERA_ZOOM_DEFAULT = 1.5
-CAMERA_ZOOM_MIN = 0.75
-CAMERA_ZOOM_MAX = 3.0
+CAMERA_ZOOM_DEFAULT = 2.5  # Bigger for easier viewing
+CAMERA_ZOOM_MIN = 1.0
+CAMERA_ZOOM_MAX = 4.0
 CAMERA_SMOOTH_SPEED = 5.0
 
 # =============================================================================

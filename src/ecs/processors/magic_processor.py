@@ -164,6 +164,12 @@ class MagicProcessor(esper.Processor):
                     if dist > ability.radius:
                         continue
                     
+                    # Check LOS - can't whirlwind through walls
+                    if self.dungeon and not self.dungeon.has_line_of_sight(
+                        pos.x, pos.y, target_pos.x, target_pos.y
+                    ):
+                        continue
+                    
                     # Apply damage
                     health.current = max(0, health.current - ability.damage_per_hit)
                     
@@ -412,9 +418,20 @@ class MagicProcessor(esper.Processor):
             spell_range = spell_data.get("range", 8.0)
             targeting = spell_data.get("targeting", "enemy")
             
-            # Auto-find target if not specified
+            # FIRST: Validate existing target has LOS (before we do anything else)
+            # This catches cases where player clicked through a wall
+            if intent.target_id >= 0 and targeting == "enemy":
+                if esper.entity_exists(intent.target_id) and esper.has_component(intent.target_id, Position):
+                    target_pos = esper.component_for_entity(intent.target_id, Position)
+                    if self.dungeon and not self.dungeon.has_line_of_sight(
+                        pos.x, pos.y, target_pos.x, target_pos.y
+                    ):
+                        # Target was selected through a wall - clear and auto-find
+                        intent.target_id = -1
+            
+            # Auto-find target if not specified (or if we cleared invalid target above)
             if intent.target_id < 0 and targeting == "enemy":
-                # Find nearest enemy in range
+                # Find nearest enemy in range (includes LOS check)
                 intent.target_id = self._find_nearest_enemy(ent, pos, spell_range)
             elif intent.target_id < 0 and targeting == "ally":
                 # Find nearest ally in range (for heals)
@@ -434,7 +451,7 @@ class MagicProcessor(esper.Processor):
                         esper.remove_component(ent, CastIntent)
                         continue
                     
-                    # Check line of sight - can't cast through walls
+                    # Final LOS check - can't cast through walls
                     if self.dungeon and not self.dungeon.has_line_of_sight(
                         pos.x, pos.y, target_pos.x, target_pos.y
                     ):
@@ -445,11 +462,18 @@ class MagicProcessor(esper.Processor):
                     intent.target_x = target_pos.x
                     intent.target_y = target_pos.y
                 else:
-                    # No valid target found, use ground targeting
-                    pass
+                    # No valid target found - cancel cast
+                    esper.remove_component(ent, CastIntent)
+                    continue
             elif targeting == "ground":
                 dist = distance(pos.x, pos.y, intent.target_x, intent.target_y)
                 if dist > spell_range:
+                    esper.remove_component(ent, CastIntent)
+                    continue
+                # Check LOS to ground target too
+                if self.dungeon and not self.dungeon.has_line_of_sight(
+                    pos.x, pos.y, intent.target_x, intent.target_y
+                ):
                     esper.remove_component(ent, CastIntent)
                     continue
             elif targeting == "self":
@@ -457,7 +481,7 @@ class MagicProcessor(esper.Processor):
                 intent.target_x = pos.x
                 intent.target_y = pos.y
             
-            # Consume mana
+            # Consume mana (only after all validation passes)
             mana.current -= mana_cost
             
             # Start cooldown
@@ -783,6 +807,10 @@ class MagicProcessor(esper.Processor):
             if dist > radius:
                 continue
             
+            # Check LOS from AoE center to target - no damage through walls
+            if self.dungeon and not self.dungeon.has_line_of_sight(cx, cy, pos.x, pos.y):
+                continue
+            
             # Apply damage
             self._apply_spell_damage(caster, ent, spell_data)
     
@@ -830,6 +858,11 @@ class MagicProcessor(esper.Processor):
                 
                 dist = distance(pos.x, pos.y, current_pos.x, current_pos.y)
                 if dist < next_dist and dist <= chain_range:
+                    # Check LOS - chain lightning can't jump through walls
+                    if self.dungeon and not self.dungeon.has_line_of_sight(
+                        current_pos.x, current_pos.y, pos.x, pos.y
+                    ):
+                        continue
                     next_dist = dist
                     next_target = ent
             
@@ -908,9 +941,10 @@ class MagicProcessor(esper.Processor):
             target_pos = esper.component_for_entity(target_id, Position)
             
             # Check line of sight - can't leap through walls
-            if self.dungeon and not self.dungeon.has_line_of_sight(
-                caster_pos.x, caster_pos.y, target_pos.x, target_pos.y
-            ):
+            if not self.dungeon:
+                print(f"[WARNING] MagicProcessor.dungeon is None! Leap not blocked by walls!")
+            elif not self.dungeon.has_line_of_sight(caster_pos.x, caster_pos.y, target_pos.x, target_pos.y):
+                print(f"[LOS BLOCKED] Leap from ({caster_pos.x:.1f},{caster_pos.y:.1f}) to ({target_pos.x:.1f},{target_pos.y:.1f})")
                 return  # Can't target through walls
             
             # Calculate AoE damage
@@ -979,6 +1013,17 @@ class MagicProcessor(esper.Processor):
             return  # Don't do instant damage - leap handles it
         
         # Regular instant melee ability (not a leap)
+        # First, check LOS - can't melee through walls!
+        if not esper.has_component(caster, Position) or not esper.has_component(target_id, Position):
+            return
+        caster_pos = esper.component_for_entity(caster, Position)
+        target_pos = esper.component_for_entity(target_id, Position)
+        
+        if self.dungeon and not self.dungeon.has_line_of_sight(
+            caster_pos.x, caster_pos.y, target_pos.x, target_pos.y
+        ):
+            return  # Can't attack through walls
+        
         # Apply damage
         if esper.has_component(target_id, Health):
             health = esper.component_for_entity(target_id, Health)
@@ -1128,6 +1173,12 @@ class MagicProcessor(esper.Processor):
             if dist > radius:
                 continue
             
+            # Check LOS - can't melee AoE through walls
+            if self.dungeon and not self.dungeon.has_line_of_sight(
+                caster_pos.x, caster_pos.y, pos.x, pos.y
+            ):
+                continue
+            
             # Apply damage
             health.current = max(0, health.current - final_damage)
             
@@ -1171,6 +1222,10 @@ class MagicProcessor(esper.Processor):
             
             dist = distance(x, y, pos.x, pos.y)
             if dist > radius:
+                continue
+            
+            # Check LOS from AoE center to target - no damage through walls
+            if self.dungeon and not self.dungeon.has_line_of_sight(x, y, pos.x, pos.y):
                 continue
             
             # Apply damage
@@ -1237,6 +1292,12 @@ class MagicProcessor(esper.Processor):
             # Check distance
             dist = distance(caster_pos.x, caster_pos.y, pos.x, pos.y)
             if dist > cone_range:
+                continue
+            
+            # Check LOS - can't cleave through walls
+            if self.dungeon and not self.dungeon.has_line_of_sight(
+                caster_pos.x, caster_pos.y, pos.x, pos.y
+            ):
                 continue
             
             # Check angle

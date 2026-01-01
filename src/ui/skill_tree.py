@@ -6,7 +6,6 @@ import math
 from typing import List, Tuple, Dict
 
 from ..core.constants import (
-    SCREEN_WIDTH, SCREEN_HEIGHT,
     COLOR_UI_BG, COLOR_UI_BORDER, COLOR_UI_ACCENT,
     COLOR_TEXT, COLOR_TEXT_DIM, COLOR_XP
 )
@@ -89,11 +88,11 @@ class SkillTreeUI:
         self.font_small = pygame.font.Font(None, 18)
         self.font_title = pygame.font.Font(None, 48)
         
-        # Layout
+        # Layout (calculated dynamically in render)
         self.panel_width = 900
         self.panel_height = 550
-        self.panel_x = (SCREEN_WIDTH - self.panel_width) // 2
-        self.panel_y = (SCREEN_HEIGHT - self.panel_height) // 2
+        self.panel_x = 0
+        self.panel_y = 0
     
     def toggle(self):
         """Toggle visibility."""
@@ -182,8 +181,14 @@ class SkillTreeUI:
         if ent < 0:
             return
         
+        # Update panel positions based on actual screen size
+        screen_w = self.screen.get_width()
+        screen_h = self.screen.get_height()
+        self.panel_x = (screen_w - self.panel_width) // 2
+        self.panel_y = (screen_h - self.panel_height) // 2
+        
         # Darken background
-        overlay = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT), pygame.SRCALPHA)
+        overlay = pygame.Surface((screen_w, screen_h), pygame.SRCALPHA)
         overlay.fill((0, 0, 0, 200))
         self.screen.blit(overlay, (0, 0))
         
@@ -198,7 +203,7 @@ class SkillTreeUI:
         
         # Title
         title = self.font_title.render("SKILLS", True, COLOR_UI_ACCENT)
-        title_rect = title.get_rect(centerx=SCREEN_WIDTH // 2, y=self.panel_y + 15)
+        title_rect = title.get_rect(centerx=self.screen.get_width() // 2, y=self.panel_y + 15)
         self.screen.blit(title, title_rect)
         
         # Character name
@@ -223,7 +228,7 @@ class SkillTreeUI:
             "Press 1-4 to switch skills, K or ESC to close, TAB to switch characters",
             True, COLOR_TEXT_DIM
         )
-        hint_rect = hint.get_rect(centerx=SCREEN_WIDTH // 2, 
+        hint_rect = hint.get_rect(centerx=self.screen.get_width() // 2, 
                                   y=self.panel_y + self.panel_height - 25)
         self.screen.blit(hint, hint_rect)
     

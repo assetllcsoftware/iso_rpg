@@ -16,7 +16,7 @@ from .ecs.processors import (
     SaveLoadProcessor, WorldProcessor, DroppedItemProcessor
 )
 from .ecs.factories import create_party, create_enemies_for_level
-from .ecs.components import PartyMember
+from .ecs.components import PartyMember, Position
 
 from .world import Dungeon, Pathfinder
 from .rendering import Camera, Renderer
@@ -32,9 +32,12 @@ class Game:
     """Main game class - ties everything together."""
     
     def __init__(self):
-        # Initialize display
-        self.screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
+        # Initialize display (fullscreen)
+        self.screen = pygame.display.set_mode((0, 0), pygame.FULLSCREEN)
         pygame.display.set_caption("ML Siege")
+        
+        # Get actual screen size for camera/UI
+        screen_width, screen_height = self.screen.get_size()
         
         self.clock = pygame.time.Clock()
         self.running = True
@@ -52,11 +55,11 @@ class Game:
         self.pathfinder = None
         
         # Rendering
-        self.camera = Camera(SCREEN_WIDTH, SCREEN_HEIGHT)
+        self.camera = Camera(screen_width, screen_height)
         self.renderer = Renderer(self.screen, self.camera)
         
         # UI Systems
-        self.hud = HUD(self.screen)
+        self.hud = HUD(self.screen, self.event_bus)
         self.inventory_ui = InventoryUI(self.screen)
         self.skill_tree_ui = SkillTreeUI(self.screen)
         self.action_bar = ActionBar(self.screen, self.event_bus)
@@ -299,18 +302,22 @@ class Game:
     
     def _on_town_entered(self, event):
         """Handle entering town."""
+        print(f"[TOWN] Entering town! Previous state: {self.state}")
         self.state = GameState.TOWN
-        self.town_scene.show()
+        self.town_scene.show(dungeon_level=self.current_level)
+        print(f"[TOWN] Town scene active: {self.town_scene.active}, State: {self.state}")
     
     def _on_town_left(self, event):
         """Handle leaving town."""
-        self.state = GameState.PLAYING
+        print(f"[TOWN] Leaving town, going to level {event.data.get('target_level', 1)}")
         self.town_scene.hide()
         target_level = event.data.get("target_level", 1)
         
-        if target_level != self.current_level:
-            self.current_level = target_level
-            self._generate_new_level()
+        # Always regenerate the level when leaving town to ensure clean state
+        self.current_level = target_level
+        self._generate_new_level()
+        self.state = GameState.PLAYING
+        print(f"[TOWN] Back to playing, state: {self.state}")
     
     def _on_game_loaded(self, event):
         """Handle game loaded - regenerate dungeon with saved seed and restore state."""
@@ -436,10 +443,10 @@ class Game:
                 level = esper.component_for_entity(ent, CharacterLevel)
                 level.level = char_data["level"]
             
-            # Restore spells
+            # Restore spells (keep as list to preserve order)
             if "spells" in char_data and esper.has_component(ent, SpellBook):
                 spellbook = esper.component_for_entity(ent, SpellBook)
-                spellbook.known_spells = set(char_data["spells"])
+                spellbook.known_spells = list(char_data["spells"])
         
         # Restore gold
         for ent, (_, gold) in esper.get_components(PartyMember, Gold):
@@ -638,6 +645,28 @@ class Game:
             if self.state == GameState.GAME_OVER:
                 self.game_over_overlay.update(frame_time)
             
+            # Town uses same movement/animation as dungeon
+            if self.state == GameState.TOWN:
+                # Swap to town map for collision
+                self.movement_processor.set_dungeon(self.town_scene.town_map)
+                self.input_processor.set_dungeon(self.town_scene.town_map)
+                
+                # Run same processors as dungeon (minus combat/AI)
+                self.movement_processor.process(frame_time)
+                self.animation_processor.process(frame_time)
+                self.town_scene.update(frame_time)
+                
+                # Center camera on leader
+                for ent, (member, pos) in esper.get_components(PartyMember, Position):
+                    if member.party_index == 0:
+                        self.camera.center_on(pos.x, pos.y)
+                        break
+                self.camera.update(frame_time)
+                
+                # Restore dungeon reference
+                self.movement_processor.set_dungeon(self.dungeon)
+                self.input_processor.set_dungeon(self.dungeon)
+            
             # PHASE 3: RENDER (variable) - timing is inside renderer
             self._render(frame_time)
             
@@ -679,11 +708,19 @@ class Game:
                     continue
             
             if self.state == GameState.TOWN:
+                # Town handles SPACE/ESC, passes movement to InputProcessor
                 if self.town_scene.handle_event(event):
                     continue
+                # Let InputProcessor handle movement (right-click)
+                self.input_processor.handle_event(event)
+                continue
             
             # Pass to input processor
             if self.state == GameState.PLAYING:
+                # Check HUD clicks first (town portal button, etc.)
+                if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+                    if self.hud.handle_click(event.pos):
+                        continue
                 self.input_processor.handle_event(event)
             elif event.type == pygame.KEYDOWN:
                 if event.key == pygame.K_ESCAPE:
@@ -718,7 +755,13 @@ class Game:
     
     def _render(self, dt: float):
         """Render the game."""
-        # Always render world and entities (for menu backgrounds)
+        # Town uses same renderer/camera as dungeon
+        if self.state == GameState.TOWN:
+            self.town_scene.render(self.renderer, self.camera)
+            self.notifications.render()
+            return
+        
+        # Render dungeon world and entities
         self.renderer.render(self.dungeon)
         
         # Render HUD elements when not in full-screen menus
@@ -747,5 +790,3 @@ class Game:
             self.inventory_ui.render()
         elif self.state == GameState.SKILL_TREE:
             self.skill_tree_ui.render()
-        elif self.state == GameState.TOWN:
-            self.town_scene.render()

@@ -263,7 +263,7 @@ class SaveLoadProcessor(esper.Processor):
         
         if "spells" in data and esper.has_component(ent, SpellBook):
             spellbook = esper.component_for_entity(ent, SpellBook)
-            spellbook.known_spells = set(data["spells"])
+            spellbook.known_spells = list(data["spells"])  # Keep as list to preserve order
     
     def has_save_file(self) -> bool:
         """Check if a save file exists."""

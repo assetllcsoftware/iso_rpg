@@ -22,7 +22,7 @@ class AnimationProcessor(esper.Processor):
         AnimationState.DEATH: 1,  # Single defeated frame
         AnimationState.DOWNED: 1,
         # Hero special abilities
-        AnimationState.SPIN: 24,  # 3 full rotations (8 frames each)
+        AnimationState.SPIN: 12,  # Fast spin (was 24 - 3 rotations, now faster)
         AnimationState.LEAP: 10,  # Epic jump arc with impact
         AnimationState.HEAVY: 10, # Wind-up and slam
         AnimationState.BASH: 8,   # Shield bash lunge and strike

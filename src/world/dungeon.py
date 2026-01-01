@@ -579,8 +579,8 @@ class Dungeon:
     def has_line_of_sight(self, x1: float, y1: float, x2: float, y2: float) -> bool:
         """Check if there's a clear line of sight between two points.
         
-        Uses Bresenham's line algorithm with diagonal blocking check.
-        No corner-cutting allowed - can't shoot through diagonal wall gaps.
+        Uses DDA (Digital Differential Analyzer) algorithm to check
+        EVERY single tile the line passes through. This is bulletproof.
         """
         # Convert to tile coordinates
         ix1, iy1 = int(x1), int(y1)
@@ -590,49 +590,71 @@ class Dungeon:
         if ix1 == ix2 and iy1 == iy2:
             return True
         
-        # Bresenham's line algorithm with diagonal blocking
+        # Use DDA algorithm - guaranteed to hit every tile
         dx = abs(ix2 - ix1)
         dy = abs(iy2 - iy1)
-        sx = 1 if ix1 < ix2 else -1
-        sy = 1 if iy1 < iy2 else -1
-        err = dx - dy
         
-        x, y = ix1, iy1
+        x = ix1
+        y = iy1
+        
+        # Direction of step
+        x_inc = 1 if ix2 > ix1 else -1
+        y_inc = 1 if iy2 > iy1 else -1
+        
+        # Previous position for diagonal check
         prev_x, prev_y = x, y
         
-        while True:
-            if x == ix2 and y == iy2:
-                break
-            
-            prev_x, prev_y = x, y
-            e2 = 2 * err
-            
-            moved_x = False
-            moved_y = False
-            
-            if e2 > -dy:
-                err -= dy
-                x += sx
-                moved_x = True
-            if e2 < dx:
-                err += dx
-                y += sy
-                moved_y = True
-            
-            # If we moved diagonally, check that we're not cutting through a corner
-            if moved_x and moved_y:
-                # Both adjacent tiles must be walkable to move diagonally
-                if not self.is_walkable(prev_x + sx, prev_y) and not self.is_walkable(prev_x, prev_y + sy):
-                    return False  # Blocked by corner
-                # If either adjacent is a wall, that's also suspicious for hallways
-                if not self.is_walkable(prev_x + sx, prev_y) or not self.is_walkable(prev_x, prev_y + sy):
-                    # Stricter check: if moving diagonally and one side is blocked, no LOS
-                    return False
-            
-            # Check if current tile blocks sight
-            if x != ix2 or y != iy2:  # Don't check ending tile
-                if not self.is_walkable(x, y):
-                    return False
+        if dx >= dy:
+            # X-dominant line (or equal)
+            error = dx / 2
+            while x != ix2:
+                prev_x, prev_y = x, y
+                x += x_inc
+                error -= dy
+                if error < 0:
+                    y += y_inc
+                    error += dx
+                    # Diagonal move - check corner cutting
+                    # Must be able to pass through BOTH adjacent tiles
+                    if not self.is_walkable(x, prev_y) or not self.is_walkable(prev_x, y):
+                        return False
+                
+                # Check current tile (skip destination - target stands there)
+                if x != ix2 or y != iy2:
+                    if not self.is_walkable(x, y):
+                        return False
+            # After X loop, check if Y still needs to reach destination
+            while y != iy2:
+                prev_x, prev_y = x, y
+                y += y_inc
+                if x != ix2 or y != iy2:
+                    if not self.is_walkable(x, y):
+                        return False
+        else:
+            # Y-dominant line
+            error = dy / 2
+            while y != iy2:
+                prev_x, prev_y = x, y
+                y += y_inc
+                error -= dx
+                if error < 0:
+                    x += x_inc
+                    error += dy
+                    # Diagonal move - check corner cutting
+                    if not self.is_walkable(x, prev_y) or not self.is_walkable(prev_x, y):
+                        return False
+                
+                # Check current tile (skip destination - target stands there)
+                if x != ix2 or y != iy2:
+                    if not self.is_walkable(x, y):
+                        return False
+            # After Y loop, check if X still needs to reach destination
+            while x != ix2:
+                prev_x, prev_y = x, y
+                x += x_inc
+                if x != ix2 or y != iy2:
+                    if not self.is_walkable(x, y):
+                        return False
         
         return True
     

@@ -5,11 +5,11 @@ import esper
 from typing import Optional, List, Tuple
 
 from ..core.constants import (
-    SCREEN_WIDTH, SCREEN_HEIGHT,
     COLOR_UI_BG, COLOR_UI_BORDER, COLOR_UI_ACCENT,
     COLOR_HEALTH, COLOR_MANA, COLOR_XP, COLOR_GOLD,
     COLOR_TEXT, COLOR_TEXT_DIM
 )
+from ..core.events import EventBus, Event, EventType
 from ..ecs.components import (
     Health, Mana, Gold, CharacterName, CharacterLevel,
     SkillLevels, SpellBook, Equipment, Inventory,
@@ -29,19 +29,26 @@ SPELL_KEYS = [
 class HUD:
     """In-game HUD rendering."""
     
-    def __init__(self, screen: pygame.Surface):
+    def __init__(self, screen: pygame.Surface, event_bus: EventBus = None):
         self.screen = screen
+        self.event_bus = event_bus
         
         pygame.font.init()
         self.font_small = pygame.font.Font(None, 18)
         self.font_medium = pygame.font.Font(None, 24)
         self.font_large = pygame.font.Font(None, 32)
         self.font_title = pygame.font.Font(None, 42)
+        
+        # Town portal button
+        self.portal_button_rect = pygame.Rect(20, 0, 60, 60)  # Y set dynamically
     
     def render(self, fps: float = 0.0):
         """Render the HUD."""
         # Party portraits (top left)
         self._render_party_portraits()
+        
+        # Town portal button (below portraits)
+        self._render_town_portal_button()
         
         # Spell bars (bottom center) - one row per party member
         self._render_spell_bars()
@@ -54,6 +61,63 @@ class HUD:
         
         # FPS counter (debug)
         self._render_fps(fps)
+    
+    def handle_click(self, pos: Tuple[int, int]) -> bool:
+        """Handle mouse click. Returns True if handled."""
+        if self.portal_button_rect.collidepoint(pos):
+            if self.event_bus:
+                self.event_bus.emit(Event(EventType.NOTIFICATION, {
+                    "text": "Town Portal!",
+                    "color": (100, 200, 255)
+                }))
+                self.event_bus.emit(Event(EventType.TOWN_ENTERED, {"from_level": 1}))
+            return True
+        return False
+    
+    def _render_town_portal_button(self):
+        """Render the town portal button."""
+        # Position below party portraits (after up to 3 members)
+        num_members = sum(1 for _ in esper.get_components(PartyMember, Health))
+        y = 20 + num_members * 90 + 10
+        
+        self.portal_button_rect = pygame.Rect(20, y, 60, 60)
+        
+        # Check if hovered
+        mouse_pos = pygame.mouse.get_pos()
+        is_hovered = self.portal_button_rect.collidepoint(mouse_pos)
+        
+        # Background
+        bg_color = (50, 80, 120) if is_hovered else (30, 50, 90)
+        pygame.draw.rect(self.screen, bg_color, self.portal_button_rect, border_radius=8)
+        pygame.draw.rect(self.screen, (80, 140, 200), self.portal_button_rect, 2, border_radius=8)
+        
+        # Portal swirl effect
+        cx, cy = self.portal_button_rect.center
+        import math
+        import time
+        t = time.time() * 2
+        
+        # Outer ring
+        pygame.draw.circle(self.screen, (60, 120, 180), (cx, cy), 22, 2)
+        
+        # Inner swirl
+        for i in range(6):
+            angle = t + i * (math.pi / 3)
+            r = 12 + math.sin(t * 2 + i) * 4
+            px = cx + math.cos(angle) * r
+            py = cy + math.sin(angle) * r
+            pygame.draw.circle(self.screen, (100, 180, 255), (int(px), int(py)), 3)
+        
+        # Center
+        pygame.draw.circle(self.screen, (150, 200, 255), (cx, cy), 6)
+        
+        # Label
+        label = self.font_small.render("H", True, (200, 230, 255))
+        self.screen.blit(label, (self.portal_button_rect.right - 14, self.portal_button_rect.top + 2))
+        
+        # "Town" text below
+        town_text = self.font_small.render("Town", True, COLOR_TEXT_DIM)
+        self.screen.blit(town_text, (self.portal_button_rect.x + 12, self.portal_button_rect.bottom + 2))
     
     def _render_party_portraits(self):
         """Render party member portraits and status."""
@@ -148,8 +212,8 @@ class HUD:
         bar_w = num_slots * (slot_size + slot_spacing) + 80  # Extra for label
         total_height = len(party_members) * row_height + (len(party_members) - 1) * row_spacing
         
-        bar_x = (SCREEN_WIDTH - bar_w) // 2
-        bar_y = SCREEN_HEIGHT - total_height - 20
+        bar_x = (self.screen.get_width() - bar_w) // 2
+        bar_y = self.screen.get_height() - total_height - 20
         
         for i, (party_idx, ent, spellbook, name, is_selected) in enumerate(party_members):
             row_y = bar_y + i * (row_height + row_spacing)
@@ -226,7 +290,7 @@ class HUD:
     def _render_minimap_placeholder(self):
         """Render minimap placeholder."""
         map_size = 150
-        x = SCREEN_WIDTH - map_size - 20
+        x = self.screen.get_width() - map_size - 20
         y = 20
         
         pygame.draw.rect(self.screen, COLOR_UI_BG, (x, y, map_size, map_size))
@@ -249,8 +313,8 @@ class HUD:
                 total_gold = gold.amount
                 break
         
-        x = SCREEN_WIDTH - 170
-        y = SCREEN_HEIGHT - 50
+        x = self.screen.get_width() - 170
+        y = self.screen.get_height() - 50
         
         pygame.draw.rect(self.screen, COLOR_UI_BG, (x, y, 150, 35))
         pygame.draw.rect(self.screen, COLOR_UI_BORDER, (x, y, 150, 35), 2)
@@ -272,4 +336,4 @@ class HUD:
         
         fps_text = f"FPS: {int(fps)}"
         fps_surf = self.font_small.render(fps_text, True, COLOR_TEXT_DIM)
-        self.screen.blit(fps_surf, (SCREEN_WIDTH - 80, SCREEN_HEIGHT - 25))
+        self.screen.blit(fps_surf, (self.screen.get_width() - 80, self.screen.get_height() - 25))

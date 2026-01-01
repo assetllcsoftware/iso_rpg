@@ -5,7 +5,6 @@ import esper
 from typing import Optional, Dict, List
 
 from ..core.constants import (
-    SCREEN_WIDTH, SCREEN_HEIGHT,
     COLOR_UI_BG, COLOR_UI_BORDER, COLOR_UI_ACCENT,
     COLOR_TEXT, COLOR_TEXT_DIM, COLOR_MANA, COLOR_HEALTH, RARITY_COLORS
 )
@@ -34,8 +33,8 @@ class ActionBar:
         self.bar_height = 60
         
         total_width = self.NUM_SLOTS * (self.slot_size + self.padding) + self.padding
-        self.bar_x = SCREEN_WIDTH - total_width - 20
-        self.bar_y = SCREEN_HEIGHT - self.bar_height - 100
+        self.bar_x = self.screen.get_width() - total_width - 20
+        self.bar_y = self.screen.get_height() - self.bar_height - 100
         
         # Fonts
         pygame.font.init()

@@ -98,6 +98,14 @@ class CombatProcessor(esper.Processor):
                 esper.remove_component(ent, AttackIntent)
                 continue
             
+            # FACTION CHECK: Can't attack your own team!
+            attacker_is_party = esper.has_component(ent, PartyMember)
+            target_is_party = esper.has_component(target_id, PartyMember)
+            if attacker_is_party == target_is_party:
+                # Same faction - clear intent and skip
+                esper.remove_component(ent, AttackIntent)
+                continue
+            
             # Check if target is dead/downed
             if esper.has_component(target_id, Dead):
                 esper.remove_component(ent, AttackIntent)
@@ -129,9 +137,9 @@ class CombatProcessor(esper.Processor):
                 continue
             
             # Check line of sight
-            if self.dungeon and not self.dungeon.has_line_of_sight(
-                pos.x, pos.y, target_pos.x, target_pos.y
-            ):
+            if not self.dungeon:
+                print(f"[WARNING] CombatProcessor.dungeon is None! Attacks not blocked by walls!")
+            elif not self.dungeon.has_line_of_sight(pos.x, pos.y, target_pos.x, target_pos.y):
                 continue  # Can't attack through walls
             
             # Check cooldown

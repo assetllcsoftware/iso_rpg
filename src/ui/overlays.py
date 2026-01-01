@@ -4,7 +4,6 @@ import pygame
 from typing import Callable, Optional
 
 from ..core.constants import (
-    SCREEN_WIDTH, SCREEN_HEIGHT,
     COLOR_UI_BG, COLOR_UI_BORDER, COLOR_UI_ACCENT,
     COLOR_TEXT, COLOR_TEXT_DIM, COLOR_HEALTH
 )
@@ -79,8 +78,8 @@ class PauseOverlay:
     
     def _handle_click(self, pos) -> bool:
         """Handle mouse click."""
-        center_x = SCREEN_WIDTH // 2
-        start_y = SCREEN_HEIGHT // 2 - 50
+        center_x = self.screen.get_width() // 2
+        start_y = self.screen.get_height() // 2 - 50
         
         for i, _ in enumerate(self.options):
             y = start_y + i * 50
@@ -121,18 +120,18 @@ class PauseOverlay:
             return
         
         # Dark overlay
-        overlay = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT), pygame.SRCALPHA)
+        overlay = pygame.Surface((self.screen.get_width(), self.screen.get_height()), pygame.SRCALPHA)
         overlay.fill((0, 0, 0, 200))
         self.screen.blit(overlay, (0, 0))
         
         # Title
         title = self.font_title.render("PAUSED", True, COLOR_UI_ACCENT)
-        title_rect = title.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2 - 150))
+        title_rect = title.get_rect(center=(self.screen.get_width() // 2, self.screen.get_height() // 2 - 150))
         self.screen.blit(title, title_rect)
         
         # Options
-        center_x = SCREEN_WIDTH // 2
-        start_y = SCREEN_HEIGHT // 2 - 50
+        center_x = self.screen.get_width() // 2
+        start_y = self.screen.get_height() // 2 - 50
         
         for i, option in enumerate(self.options):
             y = start_y + i * 50
@@ -233,7 +232,7 @@ class GameOverOverlay:
         
         # Red tint overlay that fades in
         alpha = min(180, int(self.timer * 100))
-        overlay = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT), pygame.SRCALPHA)
+        overlay = pygame.Surface((self.screen.get_width(), self.screen.get_height()), pygame.SRCALPHA)
         overlay.fill((40, 0, 0, alpha))
         self.screen.blit(overlay, (0, 0))
         
@@ -244,18 +243,18 @@ class GameOverOverlay:
         # Scale effect
         scaled_size = (int(title.get_width() * pulse), int(title.get_height() * pulse))
         scaled_title = pygame.transform.scale(title, scaled_size)
-        title_rect = scaled_title.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 3))
+        title_rect = scaled_title.get_rect(center=(self.screen.get_width() // 2, self.screen.get_height() // 3))
         self.screen.blit(scaled_title, title_rect)
         
         # Death message
         msg = self.font_small.render(self.death_message, True, COLOR_TEXT_DIM)
-        msg_rect = msg.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 3 + 60))
+        msg_rect = msg.get_rect(center=(self.screen.get_width() // 2, self.screen.get_height() // 3 + 60))
         self.screen.blit(msg, msg_rect)
         
         # Options (fade in after delay)
         if self.timer > 1.0:
-            center_x = SCREEN_WIDTH // 2
-            start_y = SCREEN_HEIGHT // 2 + 50
+            center_x = self.screen.get_width() // 2
+            start_y = self.screen.get_height() // 2 + 50
             
             for i, option in enumerate(self.options):
                 y = start_y + i * 50
@@ -309,14 +308,14 @@ class LoadingOverlay:
         
         # Title
         title = self.font_title.render(self.message, True, COLOR_UI_ACCENT)
-        title_rect = title.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2 - 30))
+        title_rect = title.get_rect(center=(self.screen.get_width() // 2, self.screen.get_height() // 2 - 30))
         self.screen.blit(title, title_rect)
         
         # Progress bar
         bar_width = 400
         bar_height = 20
-        bar_x = (SCREEN_WIDTH - bar_width) // 2
-        bar_y = SCREEN_HEIGHT // 2 + 20
+        bar_x = (self.screen.get_width() - bar_width) // 2
+        bar_y = self.screen.get_height() // 2 + 20
         
         pygame.draw.rect(self.screen, (40, 35, 50), 
                         (bar_x, bar_y, bar_width, bar_height))
@@ -328,6 +327,6 @@ class LoadingOverlay:
         # Progress text
         pct = int(self.progress * 100)
         pct_text = self.font.render(f"{pct}%", True, COLOR_TEXT)
-        pct_rect = pct_text.get_rect(center=(SCREEN_WIDTH // 2, bar_y + bar_height + 20))
+        pct_rect = pct_text.get_rect(center=(self.screen.get_width() // 2, bar_y + bar_height + 20))
         self.screen.blit(pct_text, pct_rect)
 

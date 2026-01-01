@@ -1560,19 +1560,27 @@ class Renderer:
         scaled_h = int(actual_h * self.camera.zoom)
         scaled = pygame.transform.scale(surf, (scaled_w, scaled_h))
         
-        # Rotate if dead (fall over effect)
+        # Check if dead/downed
         is_dead = esper.has_component(ent, Dead)
         is_downed = esper.has_component(ent, Downed)
-        if is_dead or is_downed:
+        
+        # Only rotate if dead/downed AND the sprite doesn't have a dedicated death animation
+        # If animation state is DEATH or DOWNED, the sprite has dedicated death frames - don't rotate
+        has_death_animation = anim_state in (AnimationState.DEATH, AnimationState.DOWNED)
+        should_rotate = (is_dead or is_downed) and not has_death_animation
+        
+        if should_rotate:
             # Rotate 90 degrees to show fallen
             scaled = pygame.transform.rotate(scaled, 90)
-            # Fade out dead enemies
-            if is_dead:
-                scaled.set_alpha(150)
         
-        # Center on position (use rotated dimensions)
+        # Fade out dead enemies
+        if is_dead:
+            scaled.set_alpha(150)
+        
+        # Center on position (use rotated dimensions if rotated)
         draw_x = screen_x - scaled.get_width() // 2
-        draw_y = screen_y - scaled.get_height() // 2 if (is_dead or is_downed) else screen_y - scaled_h
+        # If rotated (fallen over), center vertically. Otherwise, bottom-align
+        draw_y = screen_y - scaled.get_height() // 2 if should_rotate else screen_y - scaled_h
         
         # Draw shadow on ground if airborne (during leap)
         # Baseline offset is 16 (entities have y=-16), so leap height = air_height - 16

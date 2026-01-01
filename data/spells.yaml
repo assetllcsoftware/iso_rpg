@@ -18,9 +18,9 @@ whirlwind:
   unlock_level: 1
   tier: 1
   animation: spin
-  animation_duration: 1.8
+  animation_duration: 0.9
   hits: 6
-  hit_interval: 0.3
+  hit_interval: 0.15
   icon: skill_whirlwind
   description: "Spin rapidly, shredding all nearby enemies with 6 rapid strikes."
 
