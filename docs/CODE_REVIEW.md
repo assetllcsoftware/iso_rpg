@@ -6,8 +6,8 @@
 
 | Issue | Impact | Effort |
 |-------|--------|--------|
+| **TOWN IS BROKEN** - can't move, can't exit, processors don't run | Game literally unplayable in town | HIGH |
 | AI walks in straight lines, gets stuck on walls | Enemies freeze, combat breaks | Medium |
-| Town movement inconsistent with dungeon | Can't move, game feels broken | Medium |
 | Constants vs formulas mismatch (50% vs 10% gold penalty) | Wrong game balance | Easy |
 | Shop hardcodes prices instead of using formulas | Inconsistent economy | Easy |
 
