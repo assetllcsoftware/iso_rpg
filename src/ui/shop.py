@@ -9,6 +9,7 @@ from ..core.constants import (
     COLOR_TEXT, COLOR_TEXT_DIM, COLOR_GOLD, RARITY_COLORS
 )
 from ..core.events import EventBus, Event, EventType
+from ..core.formulas import merchant_buy_price, merchant_sell_price
 from ..ecs.components import (
     PartyMember, Gold, Inventory as InventoryComp, Equipment, CharacterName
 )
@@ -94,7 +95,7 @@ class ShopUI:
             # Show items within level range
             if min_level <= self.dungeon_level + 3:
                 base_value = item_data.get('value', 10)
-                buy_price = int(base_value * 1.5)  # 150% markup
+                buy_price = merchant_buy_price(base_value)
                 
                 self.shop_items.append({
                     'id': item_id,
@@ -130,7 +131,7 @@ class ShopUI:
                     item_data = data_loader.get_item(inv_item.item_id)
                     if item_data:
                         base_value = item_data.get('value', 10)
-                        sell_price = max(1, int(base_value * 0.5))  # 50% of value
+                        sell_price = merchant_sell_price(base_value)
                         
                         items.append((idx, {
                             'id': inv_item.item_id,
@@ -725,7 +726,7 @@ class ShopUI:
         rarity = item_data.get('rarity', 0)
         rarity_color = RARITY_COLORS.get(rarity, (180, 180, 180))
         value = item_data.get('value', 10)
-        sell_price = max(1, value // 2)
+        sell_price = merchant_sell_price(value)
         damage = item_data.get('damage', 0)
         armor = item_data.get('armor', 0)
         

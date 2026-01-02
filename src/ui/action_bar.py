@@ -94,49 +94,105 @@ class ActionBar:
         
         inv = esper.component_for_entity(entity, InventoryComp)
         
-        # Find matching consumable item
+        # Find all matching consumable items, sorted by effect_value
+        # This way we use SMALLEST potions first (efficient - don't waste big ones)
+        matching_items = []
         for i, item in enumerate(inv.items):
-            # Look up item data from the data loader
             item_data = data_loader.get_item(item.item_id)
             if not item_data:
                 continue
             
             item_effect_type = item_data.get('effect_type')
-            if item_effect_type != effect_type:
-                continue
+            if item_effect_type == effect_type:
+                effect_value = item_data.get('effect_value', 50)
+                matching_items.append((effect_value, i, item, item_data))
+        
+        if not matching_items:
+            self.event_bus.emit(Event(EventType.NOTIFICATION, {
+                "text": f"No potions available",
+                "color": (200, 150, 150)
+            }))
+            return False
+        
+        # Sort by effect_value ascending (use smallest first)
+        matching_items.sort(key=lambda x: x[0])
+        
+        # Use the smallest potion
+        effect_value, i, item, item_data = matching_items[0]
+        item_name = item_data.get('name', 'Potion')
+        
+        # Get character name for notification
+        from ..ecs.components import CharacterName
+        char_name = "???"
+        if esper.has_component(entity, CharacterName):
+            char_name = esper.component_for_entity(entity, CharacterName).name
+        
+        if effect_type == 'heal' and esper.has_component(entity, Health):
+            health = esper.component_for_entity(entity, Health)
+            health.current = min(health.maximum, health.current + effect_value)
             
-            # Found a matching item - use it!
-            effect_value = item_data.get('effect_value', 50)
-            item_name = item_data.get('name', 'Potion')
+            self.event_bus.emit(Event(EventType.NOTIFICATION, {
+                "text": f"{char_name}: +{effect_value} HP",
+                "color": (100, 255, 150)
+            }))
+        
+        elif effect_type == 'restore_mana':
+            # Mana potions go to party member with lowest mana % who uses magic
+            from ..ecs.components import PartyMember, CharacterClass
             
-            if effect_type == 'heal' and esper.has_component(entity, Health):
-                health = esper.component_for_entity(entity, Health)
-                health.current = min(health.maximum, health.current + effect_value)
+            best_target = None
+            best_mana_pct = 1.0
+            
+            for ent, (_, mana_comp) in esper.get_components(PartyMember, Mana):
+                # Skip if full mana
+                if mana_comp.current >= mana_comp.maximum:
+                    continue
+                # Prefer mages (they actually need mana)
+                is_mage = False
+                if esper.has_component(ent, CharacterClass):
+                    cc = esper.component_for_entity(ent, CharacterClass)
+                    is_mage = cc.class_name in ('mage', 'cleric')
                 
-                self.event_bus.emit(Event(EventType.NOTIFICATION, {
-                    "text": f"Used {item_name} (+{effect_value} HP)",
-                    "color": (100, 255, 150)
-                }))
+                mana_pct = mana_comp.current / max(1, mana_comp.maximum)
+                # Mages get priority (subtract 0.5 from their percentage)
+                effective_pct = mana_pct - (0.5 if is_mage else 0)
+                
+                if effective_pct < best_mana_pct:
+                    best_mana_pct = effective_pct
+                    best_target = ent
             
-            elif effect_type == 'restore_mana' and esper.has_component(entity, Mana):
-                mana = esper.component_for_entity(entity, Mana)
+            if best_target and esper.has_component(best_target, Mana):
+                mana = esper.component_for_entity(best_target, Mana)
                 mana.current = min(mana.maximum, mana.current + effect_value)
                 
+                # Get target name
+                target_name = "Ally"
+                if esper.has_component(best_target, CharacterName):
+                    target_name = esper.component_for_entity(best_target, CharacterName).name
+                
                 self.event_bus.emit(Event(EventType.NOTIFICATION, {
-                    "text": f"Used {item_name} (+{effect_value} MP)",
+                    "text": f"{target_name}: +{effect_value} MP",
                     "color": (100, 150, 255)
                 }))
-            
-            # Reduce quantity or remove item
-            item.quantity -= 1
-            if item.quantity <= 0:
-                inv.items.pop(i)
-            
-            self.cooldowns[index] = 0.5
-            return True
+            else:
+                self.event_bus.emit(Event(EventType.NOTIFICATION, {
+                    "text": "No one needs mana",
+                    "color": (150, 150, 150)
+                }))
+                return False
         
+        # Reduce quantity or remove item
+        item.quantity -= 1
+        if item.quantity <= 0:
+            inv.items.pop(i)
+        
+        self.cooldowns[index] = 0.5
+        return True
+    
+    def _use_spell_slot(self, index: int, slot: Dict, entity: int) -> bool:
+        """Use a spell from the action bar."""
         self.event_bus.emit(Event(EventType.NOTIFICATION, {
-            "text": f"No {slot.get('name', 'item')} available!",
+            "text": f"Spell slots not implemented",
             "color": (200, 100, 100)
         }))
         return False

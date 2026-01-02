@@ -18,6 +18,7 @@ from ..components import (
 from ...core.events import EventBus, Event, EventType
 from ...core.constants import AIState
 from ...core.formulas import distance
+from ...world.pathfinding import Pathfinder
 
 
 # Constants
@@ -107,17 +108,27 @@ class AIProcessor(esper.Processor):
                 target_pos = esper.component_for_entity(ai.target_id, Position)
                 attack_range = self._get_attack_range(ent)
                 
-                # Only transition to ATTACK if we have line of sight
+                # Check line of sight - enemies don't chase through walls
                 has_los = True
                 if self.dungeon:
                     has_los = self.dungeon.has_line_of_sight(
-                        pos.x, pos.y, target_pos.x, target_pos.y
+                        int(pos.x), int(pos.y), int(target_pos.x), int(target_pos.y)
                     )
                 
-                if target_dist <= attack_range and has_los:
+                if not has_los:
+                    # Lost sight of target - give up and return home
+                    ai.state = AIState.RETURN
+                    ai.target_id = -1
+                    self._stop_moving(ent)
+                    # Clear any path we were following
+                    if esper.has_component(ent, Path):
+                        esper.remove_component(ent, Path)
+                    continue
+                
+                if target_dist <= attack_range:
                     ai.state = AIState.ATTACK
                 else:
-                    # Chase - pathfinder will find way around walls
+                    # Chase - use pathfinding only for minor obstacles (player is visible)
                     self._move_toward_entity(ent, pos, ai.target_id)
             
             elif ai.state == AIState.ATTACK:
@@ -484,7 +495,56 @@ class AIProcessor(esper.Processor):
         self._move_toward_point(ent, pos, target_pos.x, target_pos.y, speed_mult)
     
     def _move_toward_point(self, ent: int, pos: Position, tx: float, ty: float, speed_mult: float = 1.0):
-        """Set movement intent toward a point."""
+        """Set movement toward a point, using simple pathfinding only for minor obstacles."""
+        dist = distance(pos.x, pos.y, tx, ty)
+        
+        # If close enough, use direct movement
+        if dist < 1.5:
+            self._move_direct(ent, pos, tx, ty, speed_mult)
+            return
+        
+        # Check if we're already following a valid path
+        if esper.has_component(ent, Path):
+            path = esper.component_for_entity(ent, Path)
+            if path.has_path and path.waypoints:
+                last_wp = path.waypoints[-1]
+                if distance(last_wp[0], last_wp[1], tx, ty) < 1.5:
+                    # Path still valid, keep following
+                    return
+        
+        # Check if next step would hit a wall
+        next_x = pos.x + (tx - pos.x) / dist * 0.5
+        next_y = pos.y + (ty - pos.y) / dist * 0.5
+        
+        path_clear = True
+        if self.dungeon:
+            path_clear = self.dungeon.is_walkable(int(next_x), int(next_y))
+        
+        if path_clear:
+            # Direct path is clear, just move
+            self._move_direct(ent, pos, tx, ty, speed_mult)
+            if esper.has_component(ent, Path):
+                esper.remove_component(ent, Path)
+            return
+        
+        # There's an obstacle - use pathfinding if available
+        if self.pathfinder and self.dungeon:
+            waypoints = self.pathfinder.find_path(pos.x, pos.y, tx, ty, max_iterations=200)
+            
+            if waypoints and len(waypoints) > 1:
+                if esper.has_component(ent, Path):
+                    path = esper.component_for_entity(ent, Path)
+                    path.waypoints = waypoints
+                    path.current_index = 0
+                else:
+                    esper.add_component(ent, Path(waypoints=waypoints, current_index=0))
+                return
+        
+        # No path found or no pathfinder - try direct movement anyway
+        self._move_direct(ent, pos, tx, ty, speed_mult)
+    
+    def _move_direct(self, ent: int, pos: Position, tx: float, ty: float, speed_mult: float = 1.0):
+        """Set direct movement intent toward a point (no pathfinding)."""
         dx = tx - pos.x
         dy = ty - pos.y
         dist = max(0.01, distance(pos.x, pos.y, tx, ty))

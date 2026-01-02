@@ -8,6 +8,7 @@ pygame = "*"
 esper = "*"
 pyyaml = "*"
 numpy = "*"
+pytest = "*"
 
 [dev-packages]
 

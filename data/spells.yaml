@@ -13,7 +13,7 @@ whirlwind:
   targeting: self
   damage_multiplier: 0.8
   radius: 3.0
-  mana_cost: 20
+  mana_cost: 0  # Melee ability - no mana cost
   cooldown: 8.0
   unlock_level: 1
   tier: 1
@@ -32,7 +32,7 @@ leap_strike:
   targeting: enemy
   damage_multiplier: 3.0
   damage_flat: 30
-  mana_cost: 25
+  mana_cost: 0  # Melee ability - no mana cost
   cooldown: 12.0
   range: 6.0
   unlock_level: 1
@@ -55,7 +55,7 @@ crushing_blow:
   type: instant
   targeting: enemy
   damage_multiplier: 4.0
-  mana_cost: 25
+  mana_cost: 0  # Melee ability - no mana cost
   cooldown: 8.0
   range: 2.5
   unlock_level: 1
@@ -81,7 +81,7 @@ shield_bash:
   type: instant
   targeting: enemy
   damage_multiplier: 0.5
-  mana_cost: 15
+  mana_cost: 0  # Melee ability - no mana cost
   cooldown: 10.0
   range: 2.0
   unlock_level: 2
@@ -106,7 +106,7 @@ battle_cry:
     amount: 0.25
     duration: 10.0
   radius: 6.0
-  mana_cost: 25
+  mana_cost: 0  # Melee ability - no mana cost
   cooldown: 30.0
   unlock_level: 3
   tier: 3

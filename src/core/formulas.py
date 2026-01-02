@@ -394,18 +394,21 @@ def room_count(level: int) -> int:
 # =============================================================================
 
 def merchant_buy_price(item_value: int) -> int:
-    """Price player pays to buy from merchant (100%)."""
-    return item_value
+    """Price player pays to buy from merchant."""
+    from .constants import MERCHANT_SELL_RATE
+    return int(item_value * MERCHANT_SELL_RATE)
 
 
 def merchant_sell_price(item_value: int) -> int:
-    """Price merchant pays for player's item (50%)."""
-    return max(1, item_value // 2)
+    """Price merchant pays for player's item."""
+    from .constants import MERCHANT_BUY_RATE
+    return max(1, int(item_value * MERCHANT_BUY_RATE))
 
 
 def death_gold_penalty(current_gold: int) -> int:
-    """Gold lost on party wipe (10%)."""
-    return int(current_gold * 0.10)
+    """Gold lost on party wipe."""
+    from .constants import DEATH_GOLD_PENALTY
+    return int(current_gold * DEATH_GOLD_PENALTY)
 
 
 # =============================================================================

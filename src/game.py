@@ -453,26 +453,11 @@ class Game:
         self.world_processor.set_dungeon(self.dungeon)
         self.loot_processor.dungeon_level = self.current_level
         self.minimap.set_dungeon(self.dungeon)
+        self.renderer.set_explored_tiles(self.minimap.explored)
+        self.world_processor.set_dungeon_level(self.current_level)
         
-        # Respawn enemies at correct spawn points
-        create_enemies_for_level(
-            self.dungeon.spawn_points,
-            self.current_level,
-            {"spawning": {"enemy_table": [
-                {"levels": [1, 3], "enemies": [
-                    {"id": "skeleton", "weight": 50},
-                    {"id": "goblin", "weight": 30},
-                    {"id": "spider", "weight": 20}
-                ]},
-                {"levels": [4, 99], "enemies": [
-                    {"id": "skeleton", "weight": 30},
-                    {"id": "goblin", "weight": 25},
-                    {"id": "zombie", "weight": 25},
-                    {"id": "orc", "weight": 15},
-                    {"id": "spider", "weight": 5}
-                ]}
-            ]}}
-        )
+        # Enemies will spawn via room activation when player enters rooms
+        # (Saved enemies should be restored separately from save data)
         
         # Update save processor with dungeon info
         self.save_load_processor.set_dungeon_info(self.current_level, self.dungeon.seed)
@@ -619,8 +604,9 @@ class Game:
         self.world_processor.set_dungeon(self.dungeon)
         self.loot_processor.dungeon_level = self.current_level
         
-        # Update minimap
+        # Update minimap and fog of war
         self.minimap.set_dungeon(self.dungeon)
+        self.renderer.set_explored_tiles(self.minimap.explored)
         
         # Update save processor with dungeon info
         self.save_load_processor.set_dungeon_info(self.current_level, self.dungeon.seed)
@@ -635,26 +621,8 @@ class Game:
                 pos.y = spawn_y
                 spawn_x += 1.0  # Offset party members
         
-        # Create new enemies
-        from .ecs.factories import create_enemies_for_level
-        create_enemies_for_level(
-            self.dungeon.spawn_points,
-            self.current_level,
-            {"spawning": {"enemy_table": [
-                {"levels": [1, 3], "enemies": [
-                    {"id": "skeleton", "weight": 50},
-                    {"id": "goblin", "weight": 30},
-                    {"id": "spider", "weight": 20}
-                ]},
-                {"levels": [4, 99], "enemies": [
-                    {"id": "skeleton", "weight": 30},
-                    {"id": "goblin", "weight": 25},
-                    {"id": "zombie", "weight": 25},
-                    {"id": "orc", "weight": 15},
-                    {"id": "spider", "weight": 5}
-                ]}
-            ]}}
-        )
+        # Enemies spawn via room activation as player explores
+        self.world_processor.set_dungeon_level(self.current_level)
         
         # Center camera
         self.camera.center_on(spawn_x - 1, spawn_y)
@@ -690,8 +658,9 @@ class Game:
         self.world_processor.set_dungeon(self.dungeon)
         self.loot_processor.dungeon_level = self.current_level
         
-        # Update minimap
+        # Update minimap and fog of war
         self.minimap.set_dungeon(self.dungeon)
+        self.renderer.set_explored_tiles(self.minimap.explored)
         
         # Update save processor with dungeon info
         self.save_load_processor.set_dungeon_info(self.current_level, self.dungeon.seed)
@@ -702,23 +671,8 @@ class Game:
         # Create party
         self.party_entities = create_party(spawn_x, spawn_y)
         
-        # Create enemies
-        create_enemies_for_level(
-            self.dungeon.spawn_points,
-            self.current_level,
-            {"spawning": {"enemy_table": [
-                {"levels": [1, 3], "enemies": [
-                    {"id": "skeleton", "weight": 70},
-                    {"id": "spider", "weight": 30}
-                ]},
-                {"levels": [4, 99], "enemies": [
-                    {"id": "skeleton", "weight": 40},
-                    {"id": "zombie", "weight": 30},
-                    {"id": "orc", "weight": 20},
-                    {"id": "spider", "weight": 10}
-                ]}
-            ]}}
-        )
+        # Enemies spawn via room activation as player explores
+        self.world_processor.set_dungeon_level(self.current_level)
         
         # Center camera on player
         self.camera.center_on(spawn_x, spawn_y)

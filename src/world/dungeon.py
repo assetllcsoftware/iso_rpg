@@ -78,6 +78,10 @@ class Dungeon:
         self.decorations: List[Decoration] = []  # Void space decorations
         self.room_props: List[RoomProp] = []     # Barrels, urns, chests
         self.floor_decor: List[FloorDecor] = []  # Floor patterns
+        
+        # Room-based spawning
+        self.activated_rooms: Set[int] = set()  # Indices of rooms player has entered
+        self.room_spawn_points: dict = {}  # room_index -> list of spawn points
         self.stairs_down: Optional[Tuple[int, int]] = None
         self.stairs_up: Optional[Tuple[int, int]] = None
         self.seed: Optional[int] = None
@@ -193,21 +197,30 @@ class Dungeon:
                 self.tiles[y][x] = TileType.FLOOR
     
     def _generate_spawn_points(self):
-        """Generate enemy spawn points in rooms."""
+        """Generate enemy spawn points per room (for room-based spawning)."""
         self.spawn_points.clear()
+        self.room_spawn_points.clear()
+        self.activated_rooms.clear()
         
-        # Skip first room (player spawn)
-        for room in self.rooms[1:]:
-            # Place spawn points inside rooms (1-2 per room for early game balance)
+        # First room (player spawn) is automatically activated
+        self.activated_rooms.add(0)
+        
+        # Skip first room (player spawn) - enemies spawn in other rooms
+        for room_idx, room in enumerate(self.rooms[1:], start=1):
+            # Place spawn points inside rooms (2-4 per room)
             inner = room.inner
-            num_spawns = random.randint(1, 2)
+            num_spawns = random.randint(2, 4)
+            room_spawns = []
             
             for _ in range(num_spawns):
                 x = random.randint(inner[0], inner[0] + inner[2])
                 y = random.randint(inner[1], inner[1] + inner[3])
                 
                 if self.is_walkable(x, y):
-                    self.spawn_points.append((x, y))
+                    room_spawns.append((x, y))
+                    self.spawn_points.append((x, y))  # Keep global list for compatibility
+            
+            self.room_spawn_points[room_idx] = room_spawns
     
     def _generate_room_props(self):
         """Generate barrels, urns, chests, crates inside rooms."""
@@ -551,6 +564,30 @@ class Dungeon:
         tile = self.tiles[y][x]
         return tile in (TileType.FLOOR, TileType.DOOR, 
                        TileType.STAIRS_DOWN, TileType.STAIRS_UP)
+    
+    def get_room_at(self, x: float, y: float) -> Optional[int]:
+        """Get the index of the room containing this position, or None."""
+        ix, iy = int(x), int(y)
+        for i, room in enumerate(self.rooms):
+            if (room.x <= ix < room.x + room.width and
+                room.y <= iy < room.y + room.height):
+                return i
+        return None
+    
+    def is_room_activated(self, room_index: int) -> bool:
+        """Check if a room has been activated (player has entered)."""
+        return room_index in self.activated_rooms
+    
+    def activate_room(self, room_index: int) -> List[Tuple[int, int]]:
+        """Activate a room and return its spawn points for enemies.
+        
+        Returns empty list if room was already activated.
+        """
+        if room_index in self.activated_rooms:
+            return []
+        
+        self.activated_rooms.add(room_index)
+        return self.room_spawn_points.get(room_index, [])
     
     def get_tile(self, x: int, y: int) -> TileType:
         """Get tile type at position."""

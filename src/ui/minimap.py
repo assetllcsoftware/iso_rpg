@@ -1,47 +1,51 @@
-"""Minimap rendering."""
+"""Minimap rendering with fog of war."""
 
 import pygame
 import esper
-from typing import Optional, Tuple
+from typing import Optional, Tuple, Set
 
 from ..core.constants import (
     COLOR_UI_BG, COLOR_UI_BORDER,
     TILE_WIDTH, TILE_HEIGHT
 )
-from ..ecs.components import Position, PartyMember, Enemy, Selected
+from ..ecs.components import Position, PartyMember, Enemy, Selected, Dead
 
 
 class Minimap:
-    """Renders a minimap showing dungeon layout and entities."""
+    """Renders a minimap showing dungeon layout with fog of war."""
     
     def __init__(self, screen: pygame.Surface, size: int = 150):
         self.screen = screen
         self.size = size
-        self.surface = pygame.Surface((size, size))
         self.x = self.screen.get_width() - size - 20
         self.y = 20
         
         # Colors
-        self.color_wall = (40, 35, 45)
-        self.color_floor = (60, 55, 70)
+        self.color_wall = (50, 45, 55)
+        self.color_floor = (70, 65, 80)
         self.color_player = (100, 200, 255)
         self.color_ally = (100, 255, 150)
         self.color_enemy = (255, 100, 100)
-        self.color_stairs = (255, 200, 100)
-        self.color_fog = (20, 18, 25)
+        self.color_stairs_down = (255, 200, 100)  # Gold/orange - descend
+        self.color_stairs_up = (100, 200, 255)    # Blue - ascend
+        self.color_fog = (25, 22, 30)
+        self.color_unexplored = (15, 12, 18)
         
-        # Cached dungeon data
-        self.dungeon_surface: Optional[pygame.Surface] = None
+        # Dungeon reference
+        self.dungeon = None
         self.dungeon_scale = 1.0
         self.dungeon_offset = (0, 0)
         
-        # Visibility tracking (explored tiles)
-        self.explored = set()
+        # Fog of war - explored tiles
+        self.explored: Set[Tuple[int, int]] = set()
+        self.explore_radius = 6  # How far the player can see
     
     def set_dungeon(self, dungeon):
-        """Pre-render dungeon to minimap surface."""
+        """Set dungeon reference and reset fog of war."""
+        self.dungeon = dungeon
+        self.explored.clear()
+        
         if not dungeon:
-            self.dungeon_surface = None
             return
         
         # Calculate scale to fit dungeon in minimap
@@ -50,89 +54,105 @@ class Minimap:
             (self.size - 10) / dungeon.height
         )
         
-        # Create surface
+        # Center offset
         map_width = int(dungeon.width * self.dungeon_scale)
         map_height = int(dungeon.height * self.dungeon_scale)
-        
-        self.dungeon_surface = pygame.Surface((map_width, map_height))
-        self.dungeon_surface.fill(self.color_fog)
-        
-        # Draw tiles
-        for y in range(dungeon.height):
-            for x in range(dungeon.width):
-                tile_x = int(x * self.dungeon_scale)
-                tile_y = int(y * self.dungeon_scale)
-                tile_size = max(1, int(self.dungeon_scale))
-                
-                if dungeon.is_walkable(x, y):
-                    color = self.color_floor
-                else:
-                    color = self.color_wall
-                
-                pygame.draw.rect(
-                    self.dungeon_surface, color,
-                    (tile_x, tile_y, tile_size, tile_size)
-                )
-        
-        # Draw stairs
-        if dungeon.stairs_down:
-            sx, sy = dungeon.stairs_down
-            stair_x = int(sx * self.dungeon_scale)
-            stair_y = int(sy * self.dungeon_scale)
-            pygame.draw.rect(
-                self.dungeon_surface, self.color_stairs,
-                (stair_x, stair_y, max(2, int(self.dungeon_scale * 2)),
-                 max(2, int(self.dungeon_scale * 2)))
-            )
-        
-        # Center offset
         self.dungeon_offset = (
             (self.size - map_width) // 2,
             (self.size - map_height) // 2
         )
     
-    def update_explored(self, x: int, y: int, radius: int = 5):
+    def update_explored(self, x: int, y: int):
         """Mark tiles as explored around position."""
-        for dy in range(-radius, radius + 1):
-            for dx in range(-radius, radius + 1):
-                if dx * dx + dy * dy <= radius * radius:
+        for dy in range(-self.explore_radius, self.explore_radius + 1):
+            for dx in range(-self.explore_radius, self.explore_radius + 1):
+                if dx * dx + dy * dy <= self.explore_radius * self.explore_radius:
                     self.explored.add((x + dx, y + dy))
     
+    def is_explored(self, x: int, y: int) -> bool:
+        """Check if a tile has been explored."""
+        return (x, y) in self.explored
+    
     def render(self, center_entity: int = -1):
-        """Render the minimap."""
+        """Render the minimap with fog of war."""
         # Background
         pygame.draw.rect(self.screen, COLOR_UI_BG, 
                         (self.x, self.y, self.size, self.size))
         pygame.draw.rect(self.screen, COLOR_UI_BORDER,
                         (self.x, self.y, self.size, self.size), 2)
         
-        if not self.dungeon_surface:
+        if not self.dungeon:
             return
         
-        # Blit dungeon
-        self.screen.blit(
-            self.dungeon_surface,
-            (self.x + self.dungeon_offset[0], self.y + self.dungeon_offset[1])
-        )
+        # Update explored tiles around party members
+        for ent, (pos, _) in esper.get_components(Position, PartyMember):
+            if not esper.has_component(ent, Dead):
+                self.update_explored(int(pos.x), int(pos.y))
+        
+        # Draw dungeon tiles (only explored ones)
+        tile_size = max(1, int(self.dungeon_scale))
+        
+        for y in range(self.dungeon.height):
+            for x in range(self.dungeon.width):
+                tile_x = self.x + self.dungeon_offset[0] + int(x * self.dungeon_scale)
+                tile_y = self.y + self.dungeon_offset[1] + int(y * self.dungeon_scale)
+                
+                if self.is_explored(x, y):
+                    # Show explored tile
+                    if self.dungeon.is_walkable(x, y):
+                        color = self.color_floor
+                    else:
+                        color = self.color_wall
+                else:
+                    # Unexplored - show as dark
+                    color = self.color_unexplored
+                
+                pygame.draw.rect(
+                    self.screen, color,
+                    (tile_x, tile_y, tile_size, tile_size)
+                )
+        
+        # Draw stairs (only if explored)
+        # Stairs down (gold) - to descend deeper
+        if self.dungeon.stairs_down:
+            sx, sy = self.dungeon.stairs_down
+            if self.is_explored(sx, sy):
+                stair_x = self.x + self.dungeon_offset[0] + int(sx * self.dungeon_scale)
+                stair_y = self.y + self.dungeon_offset[1] + int(sy * self.dungeon_scale)
+                pygame.draw.rect(
+                    self.screen, self.color_stairs_down,
+                    (stair_x, stair_y, max(2, tile_size * 2), max(2, tile_size * 2))
+                )
+        
+        # Stairs up (blue) - to go back up
+        if self.dungeon.stairs_up:
+            sx, sy = self.dungeon.stairs_up
+            if self.is_explored(sx, sy):
+                stair_x = self.x + self.dungeon_offset[0] + int(sx * self.dungeon_scale)
+                stair_y = self.y + self.dungeon_offset[1] + int(sy * self.dungeon_scale)
+                pygame.draw.rect(
+                    self.screen, self.color_stairs_up,
+                    (stair_x, stair_y, max(2, tile_size * 2), max(2, tile_size * 2))
+                )
         
         # Draw entities
         self._render_entities()
     
     def _render_entities(self):
-        """Render entity markers on minimap."""
-        # Draw enemies first (red dots)
+        """Render entity markers on minimap (only in explored areas)."""
+        # Draw enemies (only if in explored area)
         for ent, (pos, _) in esper.get_components(Position, Enemy):
-            self._draw_entity_marker(pos.x, pos.y, self.color_enemy, 2)
+            if esper.has_component(ent, Dead):
+                continue
+            if self.is_explored(int(pos.x), int(pos.y)):
+                self._draw_entity_marker(pos.x, pos.y, self.color_enemy, 2)
         
-        # Draw party members
+        # Draw party members (always visible)
         for ent, (pos, member) in esper.get_components(Position, PartyMember):
             is_selected = esper.has_component(ent, Selected)
             color = self.color_player if is_selected else self.color_ally
             size = 4 if is_selected else 3
             self._draw_entity_marker(pos.x, pos.y, color, size)
-            
-            # Update fog of war around party members
-            self.update_explored(int(pos.x), int(pos.y))
     
     def _draw_entity_marker(self, world_x: float, world_y: float, 
                            color: Tuple[int, int, int], size: int):

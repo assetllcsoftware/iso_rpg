@@ -1336,8 +1336,52 @@ class MagicProcessor(esper.Processor):
             anim.state = self._get_animation_state(spell_data, AnimationState.ATTACK)
             anim.frame = 0
 
+    def _apply_projectile_damage(self, caster: int, target: int, damage: int, damage_type: str):
+        """Apply projectile damage to a target (damage already scaled at creation)."""
+        # Skip if caster and target are same faction (no friendly fire)
+        caster_is_player = esper.has_component(caster, PartyMember)
+        target_is_player = esper.has_component(target, PartyMember)
+        
+        if caster_is_player and target_is_player:
+            return  # Don't hurt allies
+        
+        caster_is_enemy = esper.has_component(caster, Enemy)
+        target_is_enemy = esper.has_component(target, Enemy)
+        
+        if caster_is_enemy and target_is_enemy:
+            return  # Enemies don't hurt each other
+        
+        # Get resistance
+        resistance = 0.0
+        if esper.has_component(target, Resistances):
+            res = esper.component_for_entity(target, Resistances)
+            resistance = getattr(res, damage_type, 0.0)
+        
+        final_damage = calculate_elemental_damage(damage, resistance)
+        
+        # Apply damage
+        if esper.has_component(target, Health):
+            health = esper.component_for_entity(target, Health)
+            health.current = max(0, health.current - final_damage)
+        
+        # Create damage number (red if hitting party member)
+        if esper.has_component(target, Position):
+            pos = esper.component_for_entity(target, Position)
+            is_player_dmg = esper.has_component(target, PartyMember)
+            esper.create_entity(
+                Position(x=pos.x, y=pos.y - 0.5),
+                DamageNumber(value=final_damage, is_player_damage=is_player_dmg)
+            )
+        
+        self.event_bus.emit(Event(EventType.DAMAGE_DEALT, {
+            "attacker": caster,
+            "target": target,
+            "amount": final_damage,
+            "damage_type": damage_type
+        }))
+    
     def _apply_spell_damage(self, caster: int, target: int, spell_data: dict):
-        """Apply spell damage to a target."""
+        """Apply spell damage to a target (for non-projectile spells that need scaling)."""
         # Skip if caster and target are same faction (no friendly fire)
         caster_is_player = esper.has_component(caster, PartyMember)
         target_is_player = esper.has_component(target, PartyMember)
@@ -1363,6 +1407,14 @@ class MagicProcessor(esper.Processor):
             skills = esper.component_for_entity(caster, SkillLevels)
             school = spell_data.get("school", "combat_magic")
             skill_level = skills.get(school)
+        
+        # Sanity check - clamp to reasonable values
+        if skill_level > 50:
+            print(f"[SPELL BUG] Insane skill_level={skill_level} for {school}, clamping to 50")
+            skill_level = min(50, skill_level)
+        if intelligence > 100:
+            print(f"[SPELL BUG] Insane intelligence={intelligence}, clamping to 100")
+            intelligence = min(100, intelligence)
         
         scaled_damage = calculate_spell_damage(damage, intelligence, skill_level)
         
@@ -1426,10 +1478,8 @@ class MagicProcessor(esper.Processor):
                 
                 # Check for hit on intended target
                 if dist < 0.6:
-                    spell_data = data_loader.get_spell(proj.spell_id) or {}
-                    spell_data["damage"] = proj.damage
-                    spell_data["damage_type"] = proj.damage_type
-                    self._apply_spell_damage(proj.caster_id, proj.target_id, spell_data)
+                    # Use pre-calculated damage from projectile (already scaled at creation)
+                    self._apply_projectile_damage(proj.caster_id, proj.target_id, proj.damage, proj.damage_type)
                     
                     # Create hit effect
                     esper.create_entity(
@@ -1448,10 +1498,8 @@ class MagicProcessor(esper.Processor):
                 # Target died or doesn't exist - check for collision with any valid enemy
                 hit_entity = self._check_projectile_collision(pos, proj.caster_id, caster_is_player)
                 if hit_entity:
-                    spell_data = data_loader.get_spell(proj.spell_id) or {}
-                    spell_data["damage"] = proj.damage
-                    spell_data["damage_type"] = proj.damage_type
-                    self._apply_spell_damage(proj.caster_id, hit_entity, spell_data)
+                    # Use pre-calculated damage from projectile (already scaled at creation)
+                    self._apply_projectile_damage(proj.caster_id, hit_entity, proj.damage, proj.damage_type)
                     
                     esper.create_entity(
                         Position(x=pos.x, y=pos.y),

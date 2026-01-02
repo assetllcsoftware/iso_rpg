@@ -41,6 +41,9 @@ class Renderer:
         TileType.PIT: (40, 30, 20),            # Dark pit
     }
     
+    # Fog of war colors
+    FOG_COLOR = (20, 15, 10, 200)  # Dark with alpha
+    
     def __init__(self, screen: pygame.Surface, camera: Camera):
         self.screen = screen
         self.camera = camera
@@ -50,6 +53,10 @@ class Renderer:
         # Pre-render tile surfaces
         self._tile_surfaces = {}
         self._generate_tile_surfaces()
+        
+        # Fog of war - reference to explored tiles (set by game)
+        self.explored_tiles = None  # Set[Tuple[int, int]]
+        self.fog_enabled = True
         
         # Pre-render decoration surfaces (for performance)
         self._palm_cache = {}
@@ -142,6 +149,16 @@ class Renderer:
                 
                 self._tile_surfaces[(tile_type, 'wall')] = wall_surf
     
+    def set_explored_tiles(self, explored: set):
+        """Set reference to explored tiles for fog of war."""
+        self.explored_tiles = explored
+    
+    def is_explored(self, x: int, y: int) -> bool:
+        """Check if a tile is explored (visible to player)."""
+        if not self.fog_enabled or self.explored_tiles is None:
+            return True
+        return (x, y) in self.explored_tiles
+    
     def render(self, dungeon: Optional[Dungeon]):
         """Render the entire game scene."""
         from ..core.perf_monitor import perf
@@ -192,7 +209,7 @@ class Renderer:
         perf.measure("Renderer")
     
     def _render_dungeon(self, dungeon: Dungeon):
-        """Render dungeon tiles."""
+        """Render dungeon tiles with fog of war."""
         bounds = self.camera.get_visible_bounds()
         min_x = max(0, int(bounds[0]) - 2)
         min_y = max(0, int(bounds[1]) - 2)
@@ -205,6 +222,11 @@ class Renderer:
                 tile = dungeon.get_tile(x, y)
                 
                 if tile == TileType.VOID:
+                    continue
+                
+                # FOG OF WAR: Skip rendering unexplored tiles entirely
+                # They just show as the background color (void)
+                if not self.is_explored(x, y):
                     continue
                 
                 screen_x, screen_y = self.camera.world_to_screen(x, y)
@@ -256,6 +278,10 @@ class Renderer:
                 
                 x = room.x
                 
+                # FOG OF WAR: Skip walls in unexplored areas
+                if not self.is_explored(x, y):
+                    continue
+                
                 # Skip wall if there's a corridor entering/exiting here
                 # Check: is the tile to the LEFT of this edge walkable? (corridor going out)
                 has_corridor = False
@@ -289,6 +315,10 @@ class Renderer:
                     continue
                 
                 y = room.y
+                
+                # FOG OF WAR: Skip walls in unexplored areas
+                if not self.is_explored(x, y):
+                    continue
                 
                 # Skip wall if there's a corridor entering/exiting here
                 # Check: is the tile ABOVE this edge walkable? (corridor going out)
@@ -1270,6 +1300,10 @@ class Renderer:
                     bounds[1] - 5 <= decor.y <= bounds[3] + 5):
                 continue
             
+            # FOG OF WAR: Skip decorations in unexplored areas
+            if not self.is_explored(int(decor.x), int(decor.y)):
+                continue
+            
             self._draw_floor_decor(decor)
     
     def _draw_floor_decor(self, decor):
@@ -1439,11 +1473,14 @@ class Renderer:
         """Render room props (barrels, urns, chests, etc.)."""
         bounds = self.camera.get_visible_bounds()
         
-        # Collect visible props
+        # Collect visible props (only in explored areas)
         visible_props = []
         for prop in dungeon.room_props:
             if (bounds[0] - 2 <= prop.x <= bounds[2] + 2 and
                 bounds[1] - 2 <= prop.y <= bounds[3] + 2):
+                # FOG OF WAR: Skip props in unexplored areas
+                if not self.is_explored(int(prop.x), int(prop.y)):
+                    continue
                 visible_props.append(prop)
         
         # Sort by Y for proper layering
@@ -1505,6 +1542,11 @@ class Renderer:
             # Skip dropped items and gold - they're rendered separately
             if esper.has_component(ent, DroppedItem) or esper.has_component(ent, GoldDrop):
                 continue
+            
+            # Fog of war - hide enemies in unexplored areas
+            if esper.has_component(ent, Enemy):
+                if not self.is_explored(int(pos.x), int(pos.y)):
+                    continue
             
             entities.append((
                 ent,

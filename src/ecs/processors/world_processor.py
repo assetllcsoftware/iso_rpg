@@ -1,8 +1,9 @@
-"""World processor - handles stairs, level transitions, and world interactions."""
+"""World processor - handles stairs, level transitions, room activation, and world interactions."""
 
 import esper
+import random
 
-from ..components import Position, PartyMember, PlayerControlled, Selected
+from ..components import Position, PartyMember, PlayerControlled, Selected, Dead
 from ...core.events import EventBus, Event, EventType
 from ...core.constants import TileType
 
@@ -10,33 +11,47 @@ from ...core.constants import TileType
 class WorldProcessor(esper.Processor):
     """Handles world interactions like stairs and level transitions.
     
-    Stairs now require pressing E key instead of automatic triggering.
+    Also handles room-based enemy spawning.
     """
     
     def __init__(self, event_bus: EventBus):
         self.event_bus = event_bus
         self.dungeon = None
+        self.dungeon_level = 1
         self.use_stairs_requested = False  # Set by input when E is pressed
         
         # Cooldown to prevent rapid level changes
         self.stairs_cooldown = 0.5
+        
+        # Room activation check throttle
+        self.room_check_timer = 0.0
     
     def set_dungeon(self, dungeon):
         """Set the dungeon reference."""
         self.dungeon = dungeon
+    
+    def set_dungeon_level(self, level: int):
+        """Set current dungeon level for enemy scaling."""
+        self.dungeon_level = level
     
     def request_use_stairs(self):
         """Called by input processor when player presses E."""
         self.use_stairs_requested = True
     
     def process(self, dt: float):
-        """Check for stairs interactions."""
+        """Check for stairs and room activations."""
         if not self.dungeon:
             return
         
         # Update cooldown
         if self.stairs_cooldown > 0:
             self.stairs_cooldown -= dt
+        
+        # Check room activation every 0.2 seconds
+        self.room_check_timer += dt
+        if self.room_check_timer >= 0.2:
+            self.room_check_timer = 0.0
+            self._check_room_activation()
         
         # Only check stairs if player pressed E
         if not self.use_stairs_requested:
@@ -69,6 +84,60 @@ class WorldProcessor(esper.Processor):
                     "text": "No stairs here",
                     "color": (200, 150, 150)
                 }))
+    
+    def _check_room_activation(self):
+        """Check if any party member entered a new room and spawn enemies."""
+        for ent, (pos, _) in esper.get_components(Position, PartyMember):
+            if esper.has_component(ent, Dead):
+                continue
+            
+            room_idx = self.dungeon.get_room_at(pos.x, pos.y)
+            if room_idx is not None and not self.dungeon.is_room_activated(room_idx):
+                spawn_points = self.dungeon.activate_room(room_idx)
+                
+                if spawn_points:
+                    self._spawn_room_enemies(spawn_points, room_idx)
+    
+    def _spawn_room_enemies(self, spawn_points: list, room_idx: int):
+        """Spawn enemies at the given spawn points."""
+        from ..factories.enemies import create_enemy
+        
+        # Enemy types by level
+        enemy_tables = {
+            (1, 3): [("skeleton", 60), ("goblin", 25), ("spider", 15)],
+            (4, 6): [("skeleton", 40), ("goblin", 20), ("zombie", 25), ("orc", 15)],
+            (7, 99): [("skeleton", 25), ("zombie", 25), ("orc", 25), ("demon", 25)],
+        }
+        
+        # Find appropriate enemy table
+        enemies = [("skeleton", 100)]
+        for (min_lvl, max_lvl), table in enemy_tables.items():
+            if min_lvl <= self.dungeon_level <= max_lvl:
+                enemies = table
+                break
+        
+        # Spawn enemies at each point
+        for x, y in spawn_points:
+            # Random enemy from table
+            total_weight = sum(w for _, w in enemies)
+            roll = random.randint(1, total_weight)
+            cumulative = 0
+            enemy_id = "skeleton"
+            
+            for eid, weight in enemies:
+                cumulative += weight
+                if roll <= cumulative:
+                    enemy_id = eid
+                    break
+            
+            create_enemy(enemy_id, x + 0.5, y + 0.5, self.dungeon_level)
+        
+        # Notification
+        room = self.dungeon.rooms[room_idx]
+        self.event_bus.emit(Event(EventType.NOTIFICATION, {
+            "text": f"Enemies appeared!",
+            "color": (255, 100, 100)
+        }))
     
     def _request_level_change(self, direction: int):
         """Request a level change."""
