@@ -13,7 +13,7 @@ from ..components import (
     Health, Mana, CombatStats, CombatTarget, AttackIntent,
     AIController, EnemyAI, AllyAI, AggroRange, LeashRange,
     PartyMember, Enemy, Ally, PlayerControlled, Selected, Downed, Dead,
-    SpellBook, Casting, CastIntent, GlobalCooldown
+    SpellBook, Casting, CastIntent, GlobalCooldown, StatusEffects
 )
 from ...core.events import EventBus, Event, EventType
 from ...core.constants import AIState
@@ -67,6 +67,24 @@ class AIProcessor(esper.Processor):
             Position, AIController, EnemyAI
         ):
             if esper.has_component(ent, Dead):
+                continue
+            
+            # Check if stunned
+            if esper.has_component(ent, StatusEffects):
+                effects = esper.component_for_entity(ent, StatusEffects)
+                is_stunned = False
+                for eff in effects.effects:
+                    if eff.effect_type == "stun":
+                        is_stunned = True
+                        break
+                
+                if is_stunned:
+                    self._stop_moving(ent)
+                    continue
+            
+            # PRIORITY: If stuck in wall, escape first!
+            if self.dungeon and not self.dungeon.is_walkable(int(pos.x), int(pos.y)):
+                self._escape_wall(ent, pos)
                 continue
             
             # Throttle decisions
@@ -206,6 +224,19 @@ class AIProcessor(esper.Processor):
             if esper.has_component(ent, Downed) or esper.has_component(ent, Dead):
                 self._stop_moving(ent)
                 continue
+            
+            # Check if stunned
+            if esper.has_component(ent, StatusEffects):
+                effects = esper.component_for_entity(ent, StatusEffects)
+                is_stunned = False
+                for eff in effects.effects:
+                    if eff.effect_type == "stun":
+                        is_stunned = True
+                        break
+                
+                if is_stunned:
+                    self._stop_moving(ent)
+                    continue
             
             # Throttle decisions
             ai.decision_timer -= dt
@@ -421,6 +452,38 @@ class AIProcessor(esper.Processor):
         # Set 3x cooldown for AI
         base_cooldown = spell_data.get('cooldown', 2.0)
         ally_ai.spell_ready_timers[spell_id] = base_cooldown * ALLY_SPELL_COOLDOWN_MULT
+    
+    # =========================================================================
+    # WALL ESCAPE - Priority when stuck in geometry
+    # =========================================================================
+    
+    def _escape_wall(self, ent: int, pos: Position):
+        """Move toward nearest valid tile to escape wall. NO COLLISION CHECK."""
+        if not self.dungeon:
+            return
+        
+        # Find nearest walkable tile
+        for radius in range(1, 10):
+            for dx in range(-radius, radius + 1):
+                for dy in range(-radius, radius + 1):
+                    if abs(dx) != radius and abs(dy) != radius:
+                        continue
+                    
+                    check_x = int(pos.x) + dx
+                    check_y = int(pos.y) + dy
+                    
+                    if self.dungeon.is_walkable(check_x, check_y):
+                        # Move DIRECTLY toward valid tile - bypass collision!
+                        target_x = check_x + 0.5
+                        target_y = check_y + 0.5
+                        
+                        dist = max(0.1, ((target_x - pos.x)**2 + (target_y - pos.y)**2)**0.5)
+                        move_speed = 0.3  # Move 0.3 tiles per call
+                        
+                        # Direct position update - no velocity, no collision
+                        pos.x += (target_x - pos.x) / dist * move_speed
+                        pos.y += (target_y - pos.y) / dist * move_speed
+                        return
     
     # =========================================================================
     # HELPER METHODS

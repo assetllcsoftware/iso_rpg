@@ -71,8 +71,9 @@ lyra:
     chest: mage_robes
 
   starting_spells:
-    - fireball
     - ice_shard
+    - chain_lightning
+    - fireball
     - heal
 
   starting_inventory: []

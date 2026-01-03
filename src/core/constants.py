@@ -207,7 +207,7 @@ class WeaponType(Enum):
 # MOVEMENT
 # =============================================================================
 
-BASE_MOVE_SPEED = 5.0  # Tiles per second
+BASE_MOVE_SPEED = 8.0  # Tiles per second (Was 5.0)
 DIAGONAL_MOVE_COST = 1.414  # sqrt(2)
 
 # =============================================================================
@@ -310,7 +310,7 @@ ENEMY_COUNT_PER_LEVEL = 8
 # DEBUG FLAGS
 # =============================================================================
 
-DEBUG_SHOW_FPS = False
+DEBUG_SHOW_FPS = True
 DEBUG_SHOW_COLLISION = False
 DEBUG_SHOW_PATHS = False
 DEBUG_SHOW_AI_STATE = False

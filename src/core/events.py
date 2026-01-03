@@ -199,6 +199,13 @@ class EventBus:
     def clear(self):
         """Clear all queued events without processing."""
         self._queue.clear()
+    
+    def clear_subscribers(self, event_type: EventType = None):
+        """Clear all subscribers for an event type, or all subscribers if type is None."""
+        if event_type is None:
+            self._subscribers.clear()
+        elif event_type in self._subscribers:
+            self._subscribers[event_type].clear()
 
 
 # Global event bus instance

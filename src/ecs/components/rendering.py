@@ -40,7 +40,7 @@ class Animation:
     timer: float = 0.0
     
     # Frame timing
-    frame_duration: float = 0.15
+    frame_duration: float = 0.10 # Faster animations (Was 0.15)
 
 
 @dataclass

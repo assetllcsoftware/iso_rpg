@@ -18,9 +18,9 @@ whirlwind:
   unlock_level: 1
   tier: 1
   animation: spin
-  animation_duration: 0.9
-  hits: 6
-  hit_interval: 0.15
+  animation_duration: 0.2  # Very short GCD to allow combo chaining
+  hits: 30  # 3 seconds of spinning (cancel anytime)
+  hit_interval: 0.10  # Faster ticks
   icon: skill_whirlwind
   description: "Spin rapidly, shredding all nearby enemies with 6 rapid strikes."
 
@@ -38,15 +38,16 @@ leap_strike:
   unlock_level: 1
   tier: 1
   animation: leap
-  animation_duration: 1.2
+  animation_duration: 0.6  # Much faster jump (was 1.2)
   effect:
     type: stun
     duration: 1.5
   aoe_on_impact:
-    radius: 2.0
+    radius: 1.5
     damage_multiplier: 0.6
+    stun_duration: 1.0
   icon: skill_leap
-  description: "Soar through the air and crash down with earth-shattering force!"
+  description: "Soar through the air and crash down, STUNNING all nearby enemies!"
 
 crushing_blow:
   id: crushing_blow
@@ -61,18 +62,23 @@ crushing_blow:
   unlock_level: 1
   tier: 2
   animation: heavy
-  animation_duration: 1.2
+  animation_duration: 0.5  # Faster smash!
+  impact_delay: 0.5
   effect:
-    type: stagger
-    duration: 0.8
+    type: stun
+    duration: 2.5  # Increased from 1.5
     armor_reduction: 0.3
     armor_reduction_duration: 4.0
-    knockback: 2.0
+    knockback: 5.0
+    wall_slam_damage: 25
   aoe_on_impact:
-    radius: 1.5
-    damage_multiplier: 0.4
+    radius: 2.5
+    damage_multiplier: 0.5
+    knockback: 5.0
+    wall_slam_damage: 25
+    stun_duration: 2.5  # Increased from 1.5
   icon: skill_heavy
-  description: "A devastating overhead strike that shatters the ground and sends enemies flying."
+  description: "A devastating overhead strike that shatters the ground and SCATTERS enemies!"
 
 shield_bash:
   id: shield_bash

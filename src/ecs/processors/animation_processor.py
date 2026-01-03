@@ -22,9 +22,9 @@ class AnimationProcessor(esper.Processor):
         AnimationState.DEATH: 1,  # Single defeated frame
         AnimationState.DOWNED: 1,
         # Hero special abilities
-        AnimationState.SPIN: 12,  # Fast spin (was 24 - 3 rotations, now faster)
-        AnimationState.LEAP: 10,  # Epic jump arc with impact
-        AnimationState.HEAVY: 10, # Wind-up and slam
+        AnimationState.SPIN: 12,  # Full animation but played fast
+        AnimationState.LEAP: 6,   # Faster jump arc (was 10)
+        AnimationState.HEAVY: 6,  # Faster slam (was 10)
         AnimationState.BASH: 8,   # Shield bash lunge and strike
         # Mage channeling  
         AnimationState.CHANNEL: 4,  # Looping channel
@@ -81,7 +81,11 @@ class AnimationProcessor(esper.Processor):
                 anim.timer = 0.0
             
             # Update frame timer
-            anim.timer += dt
+            step = dt
+            if anim.state == AnimationState.SPIN:
+                step = dt * 4.0  # Spin 4x faster! (0.3s per rotation)
+            
+            anim.timer += step
             
             if anim.timer >= anim.frame_duration:
                 anim.timer -= anim.frame_duration

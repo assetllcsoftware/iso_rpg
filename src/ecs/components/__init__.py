@@ -3,7 +3,7 @@
 # Transform
 from .transform import (
     Position, Velocity, Facing, Speed, CollisionRadius,
-    Path, MoveIntent, TargetPosition, Direction
+    Path, MoveIntent, TargetPosition, Direction, Knockback
 )
 
 # Health & Mana
@@ -28,7 +28,7 @@ from .equipment import Equipment, Inventory, InventoryItem, Gold
 from .spells import (
     SpellBook, CastIntent, Casting, Projectile,
     AreaEffect, StatusEffect, StatusEffects, ActiveAbility, LeapingAbility,
-    GlobalCooldown
+    GlobalCooldown, DelayedSpellEffect
 )
 
 # AI
@@ -55,7 +55,7 @@ from .items import ItemDrop, DroppedItem, GoldDrop, PickupRadius
 __all__ = [
     # Transform
     'Position', 'Velocity', 'Facing', 'Speed', 'CollisionRadius',
-    'Path', 'MoveIntent', 'TargetPosition', 'Direction',
+    'Path', 'MoveIntent', 'TargetPosition', 'Direction', 'Knockback',
     # Health
     'Health', 'Mana', 'Regeneration', 'Downed', 'Dead',
     # Combat
@@ -69,6 +69,7 @@ __all__ = [
     # Spells
     'SpellBook', 'CastIntent', 'Casting', 'Projectile',
     'AreaEffect', 'StatusEffect', 'StatusEffects', 'ActiveAbility', 'LeapingAbility',
+    'GlobalCooldown', 'DelayedSpellEffect',
     # AI
     'AIController', 'AggroRange', 'LeashRange', 'AllyAI', 'EnemyAI',
     'PatrolPath', 'Summon',

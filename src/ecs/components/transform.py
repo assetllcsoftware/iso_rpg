@@ -74,3 +74,14 @@ class TargetPosition:
     """Target position to move towards (click-to-move)."""
     x: float = 0.0
     y: float = 0.0
+
+
+@dataclass
+class Knockback:
+    """Forced movement impulse (knockback)."""
+    target_x: float = 0.0
+    target_y: float = 0.0
+    duration: float = 0.2
+    elapsed: float = 0.0
+    start_x: float = 0.0
+    start_y: float = 0.0

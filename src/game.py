@@ -46,6 +46,7 @@ class Game:
         # Fixed timestep variables
         self.accumulator = 0.0
         self.previous_time = time.time()
+        self.time_scale = 1.0  # Allow speed adjustment
         
         # Core systems
         self.event_bus = EventBus()
@@ -111,6 +112,11 @@ class Game:
     def _setup_processors(self):
         """Initialize and add all ECS processors in correct order."""
         from .ecs.processors import RegenProcessor, PositionValidator
+        
+        # Clear processor event subscriptions before creating new ones
+        # This prevents old processors from still receiving events
+        # NOTE: Only clear processor events, not UI events like ACTION_BAR_USED
+        self.event_bus.clear_subscribers(EventType.SPELL_CAST_REQUESTED)
         
         # Create processors
         self.input_processor = InputProcessor(self.event_bus)
@@ -352,7 +358,7 @@ class Game:
     
     def _restart_game(self):
         """Restart the game."""
-        self._setup_processors()
+        # Don't call _setup_processors here - start_new_game does it
         self.start_new_game()
         self.state = GameState.PLAYING
     
@@ -637,10 +643,13 @@ class Game:
         """Start a new game."""
         self.current_level = 1
         
-        # Clear esper database (this also removes processors!)
+        # Clear esper database (entities only - processors stay!)
         esper.clear_database()
         
-        # Re-add processors after clearing database
+        # Clear ALL processors too (esper.clear_database doesn't do this!)
+        esper._processors.clear()
+        
+        # Re-add processors after clearing
         self._setup_processors()
         
         # Generate dungeon
@@ -701,7 +710,7 @@ class Game:
             
             # PHASE 2: UPDATE (fixed timestep for game logic states)
             if self.state in (GameState.PLAYING, GameState.INVENTORY, GameState.SKILL_TREE):
-                self.accumulator += frame_time
+                self.accumulator += frame_time * self.time_scale
                 
                 while self.accumulator >= FIXED_TIMESTEP:
                     if self.state == GameState.PLAYING:

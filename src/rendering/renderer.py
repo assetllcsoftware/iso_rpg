@@ -19,7 +19,7 @@ from ..ecs.components import (
     Position, Sprite, Animation, AnimationState, Facing, Direction,
     Health, Mana, HealthBar, DamageNumber, RenderOffset,
     PartyMember, Enemy, Selected, Projectile, AreaEffect,
-    DroppedItem, GoldDrop, Dead, Downed
+    DroppedItem, GoldDrop, Dead, Downed, StatusEffects
 )
 from ..ecs.components.rendering import VisualEffect
 from ..core.constants import RARITY_COLORS
@@ -671,8 +671,6 @@ class Renderer:
             rotation -= 360
         while rotation < -180:
             rotation += 360
-        
-        print(f"Wall transform: detected={detected_angle:.1f}°, target={target_angle:.1f}°, rotation={rotation:.1f}°")
         
         # Apply rotation
         if abs(rotation) > 1:  # Only rotate if significant
@@ -1606,10 +1604,19 @@ class Renderer:
         is_dead = esper.has_component(ent, Dead)
         is_downed = esper.has_component(ent, Downed)
         
-        # Only rotate if dead/downed AND the sprite doesn't have a dedicated death animation
+        # Check if stunned
+        is_stunned = False
+        if esper.has_component(ent, StatusEffects):
+            effects = esper.component_for_entity(ent, StatusEffects)
+            for eff in effects.effects:
+                if eff.effect_type == "stun":
+                    is_stunned = True
+                    break
+        
+        # Only rotate if dead/downed/stunned AND the sprite doesn't have a dedicated death animation
         # If animation state is DEATH or DOWNED, the sprite has dedicated death frames - don't rotate
         has_death_animation = anim_state in (AnimationState.DEATH, AnimationState.DOWNED)
-        should_rotate = (is_dead or is_downed) and not has_death_animation
+        should_rotate = (is_dead or is_downed or is_stunned) and not has_death_animation
         
         if should_rotate:
             # Rotate 90 degrees to show fallen

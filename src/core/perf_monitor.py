@@ -84,5 +84,5 @@ class PerfMonitor:
         print(f"[{severity}] {frame_ms:.0f}ms - {top}")
 
 
-# Global instance - disabled by default, enable in game.py
-perf = PerfMonitor(enabled=True)
+# Global instance - disabled to prevent console spam
+perf = PerfMonitor(enabled=False)

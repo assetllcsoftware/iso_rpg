@@ -13,7 +13,7 @@ from typing import Optional, List, Tuple
 from ..components import (
     Position, Velocity, Speed, MoveIntent, TargetPosition, Path,
     CollisionRadius, Facing, Direction, StatusEffects, Dead, Downed,
-    PlayerControlled, Selected, PartyMember, Enemy, Projectile
+    PlayerControlled, Selected, PartyMember, Enemy, Projectile, Knockback
 )
 from ...core.events import EventBus, Event, EventType
 from ...core.formulas import distance
@@ -50,10 +50,39 @@ class MovementProcessor(esper.Processor):
         self._process_path_following(dt)
         self._process_target_positions(dt)
         
+        # Process knockbacks (force movement, overrides velocity)
+        self._process_knockbacks(dt)
+        
         # Apply velocities with collision
         self._apply_velocities(dt)
         
         perf.measure("MovementProcessor")
+    
+    def _process_knockbacks(self, dt: float):
+        """Process forced knockback movement."""
+        for ent, (pos, kb) in esper.get_components(Position, Knockback):
+            kb.elapsed += dt
+            
+            # Use EaseOutQuad for "fly fast then slow down" feel
+            progress = min(1.0, kb.elapsed / kb.duration)
+            ease = 1.0 - (1.0 - progress) * (1.0 - progress)
+            
+            # Calculate target position
+            dx = kb.target_x - kb.start_x
+            dy = kb.target_y - kb.start_y
+            
+            target_x = kb.start_x + dx * ease
+            target_y = kb.start_y + dy * ease
+            
+            # Check if this step is valid (safety check)
+            # We use a slightly smaller radius to avoid getting stuck on tiny corners
+            if self._can_move_to(target_x, target_y, 0.2):
+                pos.x = target_x
+                pos.y = target_y
+            
+            # Finished?
+            if progress >= 1.0:
+                esper.remove_component(ent, Knockback)
     
     def _process_move_intents(self, dt: float):
         """Convert MoveIntent to Velocity."""
@@ -175,6 +204,12 @@ class MovementProcessor(esper.Processor):
     def _apply_velocities(self, dt: float):
         """Apply velocities to positions with tile collision."""
         for ent, (pos, vel) in esper.get_components(Position, Velocity):
+            # Knockback overrides normal movement
+            if esper.has_component(ent, Knockback):
+                vel.dx = 0
+                vel.dy = 0
+                continue
+
             # Dead entities don't move
             if esper.has_component(ent, Dead) or esper.has_component(ent, Downed):
                 vel.dx = 0
@@ -194,6 +229,14 @@ class MovementProcessor(esper.Processor):
             radius = 0.3
             if esper.has_component(ent, CollisionRadius):
                 radius = esper.component_for_entity(ent, CollisionRadius).radius
+            
+            # SPECIAL CASE: If entity is IN a wall, let them move freely to escape
+            currently_in_wall = self.dungeon and not self.dungeon.is_walkable(int(pos.x), int(pos.y))
+            if currently_in_wall:
+                # Let them move without collision - they need to escape!
+                pos.x += vel.dx * dt
+                pos.y += vel.dy * dt
+                continue
             
             # Try X movement first
             new_x = pos.x + vel.dx * dt

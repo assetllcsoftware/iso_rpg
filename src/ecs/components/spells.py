@@ -120,6 +120,8 @@ class StatusEffects:
         """Get combined slow effect (multiplicative)."""
         mult = 1.0
         for e in self.effects:
+            if e.effect_type == "stun":
+                return 0.0  # Stopped completely
             if e.effect_type == "slow":
                 mult *= (1.0 - e.slow_amount)
         return mult
@@ -152,5 +154,20 @@ class LeapingAbility:
     aoe_radius: float = 0.0
     aoe_damage: int = 0
     stun_duration: float = 0.0
+    aoe_stun_duration: float = 0.0  # Stun duration for AOE targets
     has_landed: bool = False
+
+
+@dataclass
+class DelayedSpellEffect:
+    """Delay effect application (e.g. for heavy animations)."""
+    spell_id: str = ""
+    caster_id: int = -1
+    target_id: int = -1  # Primary target
+    target_x: float = 0.0  # Ground target
+    target_y: float = 0.0
+    timer: float = 0.0  # Time until effect applies
+    base_damage: int = 0
+    spell_data: dict = field(default_factory=dict)
+
 

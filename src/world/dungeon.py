@@ -207,9 +207,14 @@ class Dungeon:
         
         # Skip first room (player spawn) - enemies spawn in other rooms
         for room_idx, room in enumerate(self.rooms[1:], start=1):
-            # Place spawn points inside rooms (2-4 per room)
+            # Place spawn points inside rooms (2-5 per room, more dense)
             inner = room.inner
-            num_spawns = random.randint(2, 4)
+            # Scale density by room area
+            area = inner[2] * inner[3]
+            min_spawns = 3  # Minimum 3 enemies (was 2)
+            max_spawns = max(5, min(10, area // 15))  # Bigger rooms = more enemies (was 8)
+            
+            num_spawns = random.randint(min_spawns, max_spawns)
             room_spawns = []
             
             for _ in range(num_spawns):

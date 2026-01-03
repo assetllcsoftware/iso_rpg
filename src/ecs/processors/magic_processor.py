@@ -7,8 +7,8 @@ from typing import Optional
 from ..components import (
     Position, Velocity, Health, Mana, Facing, Direction,
     SpellBook, CastIntent, Casting, Projectile, AreaEffect,
-    StatusEffect, StatusEffects, ActiveAbility, LeapingAbility,
-    GlobalCooldown, CharacterName,
+    StatusEffect, StatusEffects, ActiveAbility, LeapingAbility, DelayedSpellEffect,
+    GlobalCooldown, CharacterName, Knockback,
     Attributes, SkillLevels, SkillXP,
     Animation, AnimationState, VisualEffect, RenderOffset,
     PartyMember, Enemy, Downed, Dead,
@@ -17,6 +17,7 @@ from ..components import (
 from ..components.rendering import DamageNumber
 from ..components.tags import ToRemove
 from ...core.events import EventBus, Event, EventType
+from ...core.constants import TileType
 from ...core.formulas import (
     calculate_spell_damage, calculate_heal_amount, calculate_elemental_damage,
     distance, XP_SPELL_HIT, XP_HEAL_CAST
@@ -77,6 +78,10 @@ class MagicProcessor(esper.Processor):
             if not gcd.ready:
                 return  # Still on GCD, can't cast yet
         
+        # COMBO SYSTEM: Cancel existing active abilities (like whirlwind) to allow chaining
+        if esper.has_component(caster, ActiveAbility):
+            esper.remove_component(caster, ActiveAbility)
+        
         # Get spellbook
         if not esper.has_component(caster, SpellBook):
             return
@@ -130,6 +135,9 @@ class MagicProcessor(esper.Processor):
         
         # Process leaping abilities (like leap strike)
         self._process_leaping_abilities(dt)
+        
+        # Process delayed effects (heavy attacks)
+        self._process_delayed_effects(dt)
         
         # Update projectiles
         self._update_projectiles(dt)
@@ -311,9 +319,10 @@ class MagicProcessor(esper.Processor):
                             "damage_type": "physical"
                         }))
                 
-                # AoE damage on impact
+                # AoE damage + stun on impact
                 if leap.aoe_radius > 0 and leap.aoe_damage > 0:
-                    self._apply_aoe_damage_at(ent, pos.x, pos.y, leap.aoe_radius, leap.aoe_damage, [leap.target_id])
+                    self._apply_aoe_damage_at(ent, pos.x, pos.y, leap.aoe_radius, leap.aoe_damage, 
+                                              [leap.target_id], stun_duration=leap.aoe_stun_duration)
             
             # Remove leap component after landing + small delay for animation
             if leap.has_landed and leap.elapsed >= leap.duration + 0.3:
@@ -910,8 +919,55 @@ class MagicProcessor(esper.Processor):
             "effect_type": effect_type
         }))
     
-    def _apply_melee_ability(self, caster: int, spell_data: dict, intent):
+    def _process_delayed_effects(self, dt: float):
+        """Process delayed spell effects (e.g. heavy strike impact)."""
+        for ent, (delayed,) in esper.get_components(DelayedSpellEffect):
+            delayed.timer -= dt
+            
+            if delayed.timer <= 0:
+                # Execute the effect now
+                # Create a temporary intent object to pass target info
+                intent = CastIntent(
+                    spell_id=delayed.spell_id,
+                    target_id=delayed.target_id,
+                    target_x=delayed.target_x,
+                    target_y=delayed.target_y
+                )
+                
+                # Make a copy of spell data and remove delay so we don't loop
+                spell_data = dict(delayed.spell_data)
+                spell_data["impact_delay"] = 0
+                
+                # Execute! Skip animation since it played during delay
+                self._apply_melee_ability(delayed.caster_id, spell_data, intent, skip_animation=True)
+                
+                # Remove the delayed effect entity
+                esper.delete_entity(ent)
+
+    def _apply_melee_ability(self, caster: int, spell_data: dict, intent, skip_animation: bool = False):
         """Apply a melee ability with damage multiplier."""
+        # Check for delay (e.g. heavy strike animation windup)
+        delay = spell_data.get("impact_delay", 0.0)
+        if delay > 0:
+            # Create delayed effect entity instead of applying immediately
+            esper.create_entity(DelayedSpellEffect(
+                spell_id=spell_data.get("id"),
+                caster_id=caster,
+                target_id=intent.target_id,
+                target_x=intent.target_x,
+                target_y=intent.target_y,
+                timer=delay,
+                spell_data=spell_data
+            ))
+            
+            # Start animation immediately!
+            if esper.has_component(caster, Animation):
+                anim = esper.component_for_entity(caster, Animation)
+                anim.state = self._get_animation_state(spell_data, AnimationState.ATTACK)
+                anim.frame = 0
+            
+            return
+
         target_id = intent.target_id
         if target_id < 0 or not esper.entity_exists(target_id):
             return
@@ -951,13 +1007,14 @@ class MagicProcessor(esper.Processor):
             if self.dungeon and not self.dungeon.has_line_of_sight(caster_pos.x, caster_pos.y, target_pos.x, target_pos.y):
                 return  # Can't target through walls
             
-            # Calculate AoE damage
+            # Calculate AoE damage and stun
             aoe_data = spell_data.get("aoe_on_impact", {})
             aoe_radius = aoe_data.get("radius", 0) if aoe_data else 0
             aoe_mult = aoe_data.get("damage_multiplier", 0.5) if aoe_data else 0
             aoe_damage = int(base_damage * aoe_mult) if aoe_radius > 0 else 0
+            aoe_stun_duration = aoe_data.get("stun_duration", 0) if aoe_data else 0
             
-            # Get stun duration
+            # Get stun duration for primary target
             effect_data = spell_data.get("effect", {})
             stun_duration = effect_data.get("duration", 0) if effect_data.get("type") == "stun" else 0
             
@@ -1005,6 +1062,7 @@ class MagicProcessor(esper.Processor):
                 aoe_radius=aoe_radius,
                 aoe_damage=aoe_damage,
                 stun_duration=stun_duration,
+                aoe_stun_duration=aoe_stun_duration,
                 has_landed=False
             ))
             
@@ -1058,50 +1116,49 @@ class MagicProcessor(esper.Processor):
             else:
                 esper.add_component(target_id, StatusEffects(effects=[status_effect]))
         
-        # Apply knockback if specified
+        # Save original target position BEFORE knockback for AOE
+        original_target_x = None
+        original_target_y = None
+        if esper.has_component(target_id, Position):
+            target_pos = esper.component_for_entity(target_id, Position)
+            original_target_x = target_pos.x
+            original_target_y = target_pos.y
+        
+        # Apply knockback if specified (uses helper for wall slam detection)
         knockback_dist = effect_data.get("knockback", 0)
+        wall_slam_dmg = effect_data.get("wall_slam_damage", 0)
         if knockback_dist > 0 and esper.has_component(caster, Position) and esper.has_component(target_id, Position):
             caster_pos = esper.component_for_entity(caster, Position)
             target_pos = esper.component_for_entity(target_id, Position)
             
-            # Calculate knockback direction (away from caster)
-            dx = target_pos.x - caster_pos.x
-            dy = target_pos.y - caster_pos.y
-            dist = (dx*dx + dy*dy) ** 0.5
-            if dist > 0.1:
-                # Normalize and apply knockback
-                dx /= dist
-                dy /= dist
-                
-                # Try progressively shorter knockback distances until we find a valid position
-                for mult in [1.0, 0.75, 0.5, 0.25, 0]:
-                    test_x = target_pos.x + dx * knockback_dist * mult
-                    test_y = target_pos.y + dy * knockback_dist * mult
-                    
-                    if self.dungeon:
-                        # Check if path to new position is clear (using LOS)
-                        if self.dungeon.is_walkable(int(test_x), int(test_y)) and \
-                           self.dungeon.has_line_of_sight(target_pos.x, target_pos.y, test_x, test_y):
-                            target_pos.x = test_x
-                            target_pos.y = test_y
-                            break
-                    else:
-                        # No dungeon, just apply knockback
-                        target_pos.x = test_x
-                        target_pos.y = test_y
-                        break
+            hit_wall = self._apply_knockback(target_id, target_pos, caster_pos.x, caster_pos.y, knockback_dist)
+            
+            # Wall slam bonus damage!
+            if hit_wall and wall_slam_dmg > 0 and esper.has_component(target_id, Health):
+                health = esper.component_for_entity(target_id, Health)
+                health.current = max(0, health.current - wall_slam_dmg)
+                # Extra damage number for wall slam
+                esper.create_entity(
+                    Position(x=target_pos.x, y=target_pos.y - 0.8),
+                    DamageNumber(value=wall_slam_dmg, is_player_damage=False)
+                )
         
-        # Apply AoE on impact if specified (for crushing blow ground crack)
+        # Apply AoE on impact at ORIGINAL position (before primary target was knocked back)
+        # This scatters all enemies around where the strike landed!
         aoe_data = spell_data.get("aoe_on_impact", {})
-        if aoe_data and esper.has_component(target_id, Position):
-            aoe_radius = aoe_data.get("radius", 1.5)
+        if aoe_data and original_target_x is not None:
+            aoe_radius = aoe_data.get("radius", 2.5)
             aoe_mult = aoe_data.get("damage_multiplier", 0.4)
             aoe_damage = int(base_damage * aoe_mult)
-            impact_pos = esper.component_for_entity(target_id, Position)
-            self._apply_aoe_damage_at(caster, impact_pos.x, impact_pos.y, aoe_radius, aoe_damage, [target_id])
+            aoe_knockback = aoe_data.get("knockback", 0)
+            aoe_wall_slam = aoe_data.get("wall_slam_damage", 0)
+            aoe_stun_duration = aoe_data.get("stun_duration", 0)  # Added this!
+            # Use ORIGINAL position so we hit enemies that were clumped around the target
+            self._apply_aoe_damage_at(caster, original_target_x, original_target_y, aoe_radius, aoe_damage, 
+                                      [target_id], aoe_knockback, aoe_wall_slam, stun_duration=aoe_stun_duration)
         
         # Update animation
-        if esper.has_component(caster, Animation):
+        if not skip_animation and esper.has_component(caster, Animation):
             anim = esper.component_for_entity(caster, Animation)
             anim.state = self._get_animation_state(spell_data, AnimationState.ATTACK)
             anim.frame = 0
@@ -1139,7 +1196,8 @@ class MagicProcessor(esper.Processor):
         if hits > 1:
             # Create ActiveAbility for multi-hit damage over time
             hit_interval = spell_data.get("hit_interval", 0.5)
-            total_duration = spell_data.get("animation_duration", hits * hit_interval)
+            # Use calculated duration from hits, NOT animation_duration (which might be short for cancelling)
+            total_duration = hits * hit_interval
             
             esper.add_component(caster, ActiveAbility(
                 spell_id=spell_data.get("id", ""),
@@ -1206,8 +1264,10 @@ class MagicProcessor(esper.Processor):
             anim.state = self._get_animation_state(spell_data, AnimationState.ATTACK)
             anim.frame = 0
     
-    def _apply_aoe_damage_at(self, caster: int, x: float, y: float, radius: float, damage: int, exclude: list = None):
-        """Apply AoE damage at a specific position."""
+    def _apply_aoe_damage_at(self, caster: int, x: float, y: float, radius: float, damage: int, 
+                              exclude: list = None, knockback: float = 0, wall_slam_damage: int = 0,
+                              stun_duration: float = 0):
+        """Apply AoE damage at a specific position with optional knockback and stun."""
         if exclude is None:
             exclude = []
         
@@ -1232,22 +1292,143 @@ class MagicProcessor(esper.Processor):
             if self.dungeon and not self.dungeon.has_line_of_sight(x, y, pos.x, pos.y):
                 continue
             
+            total_damage = damage
+            
+            # Apply knockback if specified (scatter effect!)
+            if knockback > 0:
+                wall_slam = self._apply_knockback(ent, pos, x, y, knockback)
+                if wall_slam and wall_slam_damage > 0:
+                    total_damage += wall_slam_damage
+            
+            # Apply stun if specified (for leap strike AOE)
+            if stun_duration > 0:
+                stun_effect = StatusEffect(
+                    effect_type="stun",
+                    duration=stun_duration,
+                    source_id=caster
+                )
+                if esper.has_component(ent, StatusEffects):
+                    effects = esper.component_for_entity(ent, StatusEffects)
+                    effects.add(stun_effect)
+                else:
+                    esper.add_component(ent, StatusEffects(effects=[stun_effect]))
+            
             # Apply damage
-            health.current = max(0, health.current - damage)
+            health.current = max(0, health.current - total_damage)
             
             # Create damage number (red if hitting party member)
             is_player_dmg = esper.has_component(ent, PartyMember)
             esper.create_entity(
                 Position(x=pos.x, y=pos.y - 0.5),
-                DamageNumber(value=damage, is_player_damage=is_player_dmg)
+                DamageNumber(value=total_damage, is_player_damage=is_player_dmg)
             )
             
             self.event_bus.emit(Event(EventType.DAMAGE_DEALT, {
                 "attacker": caster,
                 "target": ent,
-                "amount": damage,
+                "amount": total_damage,
                 "damage_type": "physical"
             }))
+    
+    def _is_position_safe(self, x: float, y: float) -> bool:
+        """Check if a position AND its corners are walkable."""
+        if not self.dungeon:
+            return True
+            
+        # Check center
+        if not self.dungeon.is_walkable(int(x), int(y)):
+            return False
+            
+        # Check corners (radius 0.3)
+        r = 0.3
+        for dx, dy in [(-r, -r), (r, -r), (-r, r), (r, r)]:
+            if not self.dungeon.is_walkable(int(x + dx), int(y + dy)):
+                return False
+                
+        return True
+
+    def _apply_knockback(self, target_id: int, target_pos, origin_x: float, origin_y: float, 
+                         knockback_dist: float) -> bool:
+        """Apply knockback to a target, pushing them away from origin.
+        
+        Returns True if they hit a wall (for wall slam damage).
+        """
+        import math
+        
+        # Calculate knockback direction (away from origin)
+        dx = target_pos.x - origin_x
+        dy = target_pos.y - origin_y
+        dist = (dx*dx + dy*dy) ** 0.5
+        
+        if dist < 0.1:
+            # Target is at origin - pick a random direction
+            import random
+            angle = random.random() * 6.28
+            dx = math.cos(angle)
+            dy = math.sin(angle)
+        else:
+            # Normalize direction
+            dx /= dist
+            dy /= dist
+        
+        # Step along knockback path - stop at first sign of wall
+        hit_wall = False
+        final_x, final_y = target_pos.x, target_pos.y
+        
+        if self.dungeon:
+            # Check in 0.2 tile increments for precision
+            for i in range(1, int(knockback_dist * 5) + 1):
+                test_dist = i * 0.2
+                test_x = target_pos.x + dx * test_dist
+                test_y = target_pos.y + dy * test_dist
+                
+                # Stop if we hit a wall OR A DOOR (keep them in the room!)
+                # Use strict corner checking to match MovementProcessor/PositionValidator
+                tile_type = self.dungeon.get_tile(int(test_x), int(test_y))
+                hit_obstacle = not self._is_position_safe(test_x, test_y) or tile_type == TileType.DOOR
+                
+                if hit_obstacle:
+                    hit_wall = True
+                    
+                    # Try to slide!
+                    # Check X movement only
+                    slide_x = test_x
+                    slide_y = final_y # Keep old Y
+                    tile_x = self.dungeon.get_tile(int(slide_x), int(slide_y))
+                    if self._is_position_safe(slide_x, slide_y) and tile_x != TileType.DOOR:
+                        final_x = slide_x
+                        final_y = slide_y
+                        continue
+
+                    # Check Y movement only
+                    slide_x = final_x # Keep old X
+                    slide_y = test_y
+                    tile_y = self.dungeon.get_tile(int(slide_x), int(slide_y))
+                    if self._is_position_safe(slide_x, slide_y) and tile_y != TileType.DOOR:
+                        final_x = slide_x
+                        final_y = slide_y
+                        continue
+                        
+                    break
+                
+                # Update position
+                final_x, final_y = test_x, test_y
+        else:
+            # No dungeon - no knockback (safer than pushing through walls)
+            pass
+        
+        # Apply the knockback via component for smooth motion
+        # Don't teleport instantly!
+        if esper.entity_exists(target_id):
+            esper.add_component(target_id, Knockback(
+                start_x=target_pos.x,
+                start_y=target_pos.y,
+                target_x=final_x,
+                target_y=final_y,
+                duration=0.2  # 200ms flight time (fast but visible)
+            ))
+        
+        return hit_wall
     
     def _apply_cone_attack(self, caster: int, spell_data: dict, intent, caster_pos):
         """Apply a cone attack (like cleave)."""

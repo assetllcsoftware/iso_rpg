@@ -63,16 +63,29 @@ class PositionValidator(esper.Processor):
                 
                 # Also check if entity is "stuck" - too close to walls to move
                 # This happens when corners overlap walls even though center is valid
-                if esper.has_component(ent, PartyMember):
+                # Apply to BOTH PartyMember and Enemy to preventing sticky walls
+                if esper.has_component(ent, PartyMember) or esper.has_component(ent, Enemy):
                     self._unstick_if_needed(ent, pos)
             else:
-                # INVALID POSITION - FIX IT
-                self._fix_invalid_position(ent, pos)
+                # IN A WALL - teleport to nearest valid tile IMMEDIATELY
+                nearest = self._find_nearest_walkable(pos.x, pos.y)
+                if nearest[0] is not None:
+                    pos.x = nearest[0]
+                    pos.y = nearest[1]
+                    self._last_valid_positions[ent] = (pos.x, pos.y)
         
         perf.measure("PositionValidator")
     
     def _unstick_if_needed(self, ent: int, pos: Position):
         """Check if entity is stuck against walls and nudge them free."""
+        # OPTIMIZATION: If entity is safely in the center of a tile, skip corner checks!
+        # This saves 4 dict lookups per entity per frame.
+        # Safe zone: 0.2 to 0.8 within the tile (since radius is 0.3)
+        tx = pos.x % 1.0
+        ty = pos.y % 1.0
+        if 0.35 < tx < 0.65 and 0.35 < ty < 0.65:
+            return
+
         # Check if any corners are in non-walkable tiles
         radius = 0.3
         corners_blocked = []
@@ -146,9 +159,23 @@ class PositionValidator(esper.Processor):
         
         print(f"[PositionValidator] WARNING: Could not fix entity {ent} at ({pos.x:.1f}, {pos.y:.1f})")
     
+    def _is_close_to_valid(self, x: float, y: float) -> bool:
+        """Check if position is within 0.5 tiles of a valid walkable tile.
+        
+        If so, the entity can walk back naturally rather than being teleported.
+        """
+        # Check the 4 adjacent tiles
+        for dx, dy in [(0.5, 0), (-0.5, 0), (0, 0.5), (0, -0.5)]:
+            check_x = x + dx
+            check_y = y + dy
+            if self.dungeon.is_walkable(int(check_x), int(check_y)):
+                return True
+        return False
+    
     def _find_nearest_walkable(self, x: float, y: float) -> Tuple[float, float]:
         """Find nearest walkable tile using expanding search."""
-        for radius in range(1, 15):
+        # Limit search radius to avoid teleporting through walls into other rooms
+        for radius in range(1, 5):  # Reduced from 15 to 5
             for dx in range(-radius, radius + 1):
                 for dy in range(-radius, radius + 1):
                     # Only check the perimeter of each radius
