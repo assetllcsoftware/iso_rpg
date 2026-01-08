@@ -375,6 +375,23 @@ class SpriteManager:
             self.generator.demon_attack,
             self.generator.demon_death,
         )
+        
+        # Town NPCs - static (no walk/attack needed)
+        self.sprites["blacksmith"] = self._generate_static_npc(self.generator.blacksmith_idle)
+        self.sprites["alchemist"] = self._generate_static_npc(self.generator.alchemist_idle)
+        self.sprites["innkeeper"] = self._generate_static_npc(self.generator.innkeeper_idle)
+    
+    def _generate_static_npc(self, idle_fn):
+        """Generate sprites for a static NPC (just idle)."""
+        sprite_set = {}
+        idle_frames = self._make_directional_frames(idle_fn, 4)
+        sprite_set[AnimationState.IDLE] = idle_frames
+        sprite_set[AnimationState.WALK] = idle_frames  # Use idle for walk too
+        sprite_set[AnimationState.ATTACK] = idle_frames
+        sprite_set[AnimationState.CAST] = idle_frames
+        sprite_set[AnimationState.DEATH] = idle_frames
+        sprite_set[AnimationState.DOWNED] = idle_frames
+        return sprite_set
     
     def _load_external_character_sprites(self, base_name: str) -> Optional[Dict]:
         """

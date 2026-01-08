@@ -19,7 +19,7 @@ from ..ecs.components import (
     Position, Sprite, Animation, AnimationState, Facing, Direction,
     Health, Mana, HealthBar, DamageNumber, RenderOffset,
     PartyMember, Enemy, Selected, Projectile, AreaEffect,
-    DroppedItem, GoldDrop, Dead, Downed, StatusEffects
+    DroppedItem, GoldDrop, Dead, Downed, StatusEffects, LightningBolt
 )
 from ..ecs.components.rendering import VisualEffect
 from ..core.constants import RARITY_COLORS
@@ -201,7 +201,10 @@ class Renderer:
         self._render_projectiles()
         
         # Render visual effects
-        self._render_visual_effects()
+        self._render_visual_effects(dungeon)
+        
+        # Render lightning bolts
+        self._render_lightning_bolts()
         
         # Render damage numbers (on top)
         self._render_damage_numbers()
@@ -1735,15 +1738,19 @@ class Renderer:
             except (ValueError, pygame.error):
                 pass  # Skip invalid effects
     
-    def _render_visual_effects(self):
+    def _render_visual_effects(self, dungeon: Optional[Dungeon] = None):
         """Render visual effects (explosions, etc.)."""
         for ent, (pos, effect) in esper.get_components(Position, VisualEffect):
             screen_x, screen_y = self.camera.world_to_screen(pos.x, pos.y)
             
             effect_type = effect.effect_type if effect.effect_type else ""
             
-            # Get base color from effect type
-            if 'fire' in effect_type:
+            # FORCE expands ring for testing if needed, but rely on correct type first
+            
+            # Determine color
+            if effect.color:
+                color = effect.color
+            elif 'fire' in effect_type:
                 color = (255, 120, 40)
             elif 'ice' in effect_type:
                 color = (100, 180, 255)
@@ -1756,10 +1763,51 @@ class Renderer:
             else:
                 color = (200, 200, 200)
             
-            # Fade based on timer - clamp alpha to valid range
-            alpha = max(0, min(255, int(255 * min(1.0, max(0.0, effect.timer)))))
+            # Fade based on timer
+            progress = 1.0 - (effect.timer / effect.duration) if effect.duration > 0 else 1.0
+            alpha = max(0, min(255, int(255 * (effect.timer / effect.duration)))) if effect.duration > 0 else 255
             
-            # Draw effect - ensure minimum size
+            # Special rendering for Expanding Ring (Tile-based Wave)
+            if effect_type == "expanding_ring":
+                center_x, center_y = pos.x, pos.y
+                max_radius = effect.radius
+                current_radius = max_radius * progress
+                wave_width = 1.5
+                
+                start_x = int(center_x - current_radius - 2)
+                end_x = int(center_x + current_radius + 2)
+                start_y = int(center_y - current_radius - 2)
+                end_y = int(center_y + current_radius + 2)
+                
+                half_w = TILE_WIDTH // 2 * self.camera.zoom
+                half_h = TILE_HEIGHT // 2 * self.camera.zoom
+                
+                for y in range(start_y, end_y + 1):
+                    for x in range(start_x, end_x + 1):
+                        # Distance check
+                        dist = ((x - center_x)**2 + (y - center_y)**2)**0.5
+                        
+                        if current_radius - wave_width <= dist <= current_radius:
+                            # Calculate alpha for this tile (fade trail)
+                            # Draw directly to screen for maximum visibility test
+                            
+                            tx, ty = self.camera.world_to_screen(x, y)
+                            
+                            # Use alpha surface
+                            tsurf = pygame.Surface((int(half_w*2 + 2), int(half_h*2 + 2)), pygame.SRCALPHA)
+                            local_pts = [
+                                (half_w, 0),
+                                (half_w*2, half_h),
+                                (half_w, half_h*2),
+                                (0, half_h)
+                            ]
+                            # High opacity (150)
+                            pygame.draw.polygon(tsurf, (*color, 150), local_pts)
+                            
+                            self.screen.blit(tsurf, (tx - half_w, ty - half_h))
+                continue
+
+            # Standard particle rendering
             size = max(4, int(20 * self.camera.zoom))
             
             try:
@@ -1769,6 +1817,43 @@ class Renderer:
                 self.screen.blit(effect_surf, (int(screen_x - size), int(screen_y - size)))
             except (ValueError, pygame.error):
                 pass  # Skip invalid effects
+    
+    def _render_lightning_bolts(self):
+        """Render chain lightning bolts as jagged lines."""
+        for ent, (bolt,) in esper.get_components(LightningBolt):
+            if not bolt.segments or len(bolt.segments) < 2:
+                continue
+            
+            # Calculate alpha based on remaining time (fade out)
+            alpha = int(255 * (bolt.timer / 0.4))
+            alpha = max(0, min(255, alpha))
+            
+            # Convert world coords to screen coords
+            screen_points = []
+            for wx, wy in bolt.segments:
+                sx, sy = self.camera.world_to_screen(wx, wy)
+                screen_points.append((int(sx), int(sy)))
+            
+            if len(screen_points) < 2:
+                continue
+            
+            # Draw glow (thicker, more transparent)
+            glow_color = (200, 200, 255, alpha // 3)
+            for i in range(len(screen_points) - 1):
+                p1, p2 = screen_points[i], screen_points[i + 1]
+                # Draw thick glow line
+                pygame.draw.line(self.screen, (100, 100, 200), p1, p2, 5)
+            
+            # Draw main bolt (bright white-yellow core)
+            core_color = (255, 255, 200)
+            for i in range(len(screen_points) - 1):
+                p1, p2 = screen_points[i], screen_points[i + 1]
+                pygame.draw.line(self.screen, core_color, p1, p2, 2)
+            
+            # Draw bright center (1px white line)
+            for i in range(len(screen_points) - 1):
+                p1, p2 = screen_points[i], screen_points[i + 1]
+                pygame.draw.line(self.screen, (255, 255, 255), p1, p2, 1)
     
     def _get_damage_type_color(self, damage_type: str) -> tuple:
         """Get color for a damage type."""

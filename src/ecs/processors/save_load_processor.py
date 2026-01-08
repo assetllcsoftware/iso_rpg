@@ -98,11 +98,13 @@ class SaveLoadProcessor(esper.Processor):
             dungeon_seed = save_data.get("dungeon_seed")
             
             # Emit event to regenerate dungeon with same seed
+            total_gold = save_data.get("total_gold", 0)
+            print(f"[LOAD DEBUG] Read from save file: total_gold={total_gold}")
             self.event_bus.emit(Event(EventType.GAME_LOADED, {
                 "path": save_path,
                 "dungeon_level": dungeon_level,
                 "dungeon_seed": dungeon_seed,
-                "total_gold": save_data.get("total_gold", 0),
+                "total_gold": total_gold,
                 "party_data": save_data.get("party", [])
             }))
             
@@ -131,10 +133,11 @@ class SaveLoadProcessor(esper.Processor):
             char_data = self._save_character(ent)
             data["party"].append(char_data)
             
-            # Track total gold
-            if esper.has_component(ent, Gold):
+            # Track total gold (only from party leader - index 0)
+            if member.party_index == 0 and esper.has_component(ent, Gold):
                 gold = esper.component_for_entity(ent, Gold)
                 data["total_gold"] = gold.amount
+                print(f"[SAVE DEBUG] Saving gold amount: {gold.amount}")
         
         return data
     

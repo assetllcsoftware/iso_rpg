@@ -6,7 +6,7 @@ from ..components import (
     Position, Velocity, Animation, AnimationState, Facing, Direction,
     Downed, Dead, InCombat, Casting, AttackIntent, ActiveAbility, LeapingAbility
 )
-from ..components.rendering import DamageNumber, VisualEffect
+from ..components.rendering import DamageNumber, VisualEffect, LightningBolt
 from ..components.tags import ToRemove
 
 
@@ -112,9 +112,9 @@ class AnimationProcessor(esper.Processor):
         if esper.has_component(ent, Casting):
             return AnimationState.CAST
         
-        # Check if attacking (has attack intent)
-        if esper.has_component(ent, AttackIntent):
-            return AnimationState.ATTACK
+        # NOTE: Don't auto-play ATTACK animation just because AttackIntent exists.
+        # CombatProcessor sets animation ONLY when attack actually executes.
+        # This prevents fidgeting when out of range, on cooldown, or no LOS.
         
         # Check if moving
         if esper.has_component(ent, Velocity):
@@ -141,4 +141,11 @@ class AnimationProcessor(esper.Processor):
             effect.timer -= dt
             
             if effect.timer <= 0:
+                esper.add_component(ent, ToRemove())
+        
+        # Update lightning bolts
+        for ent, (bolt,) in esper.get_components(LightningBolt):
+            bolt.timer -= dt
+            
+            if bolt.timer <= 0:
                 esper.add_component(ent, ToRemove())

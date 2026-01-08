@@ -9,7 +9,8 @@ from ..core.constants import (
     COLOR_TEXT, COLOR_TEXT_DIM, COLOR_MANA, COLOR_HEALTH, RARITY_COLORS
 )
 from ..ecs.components import (
-    Health, Mana, SpellBook, PartyMember, Selected, Inventory as InventoryComp
+    Health, Mana, SpellBook, PartyMember, Selected, Inventory as InventoryComp,
+    Downed, Dead
 )
 from ..core.events import EventBus, Event, EventType
 
@@ -27,22 +28,49 @@ class ActionBar:
         self.slots: List[Optional[Dict]] = [None] * self.NUM_SLOTS
         self.cooldowns: List[float] = [0.0] * self.NUM_SLOTS
         
-        # Layout
-        self.slot_size = 50
-        self.padding = 4
-        self.bar_height = 60
+        # Base layout sizes
+        self._base_slot_size = 50
+        self._base_padding = 4
+        self._base_bar_height = 60
         
-        total_width = self.NUM_SLOTS * (self.slot_size + self.padding) + self.padding
-        self.bar_x = self.screen.get_width() - total_width - 20
-        self.bar_y = self.screen.get_height() - self.bar_height - 100
+        # UI scaling
+        self._ui_scale = 1.0
+        self._rebuild_layout()
         
         # Fonts
         pygame.font.init()
-        self.font = pygame.font.Font(None, 24)
-        self.font_small = pygame.font.Font(None, 18)
+        self._base_font = 24
+        self._base_font_small = 18
+        self._rebuild_fonts()
         
         # Setup defaults
         self._setup_defaults()
+    
+    def _rebuild_layout(self):
+        """Rebuild layout at current scale."""
+        self.slot_size = int(self._base_slot_size * self._ui_scale)
+        self.padding = int(self._base_padding * self._ui_scale)
+        self.bar_height = int(self._base_bar_height * self._ui_scale)
+        
+        total_width = self.NUM_SLOTS * (self.slot_size + self.padding) + self.padding
+        self.bar_x = self.screen.get_width() - total_width - int(20 * self._ui_scale)
+        self.bar_y = self.screen.get_height() - self.bar_height - int(100 * self._ui_scale)
+    
+    def _rebuild_fonts(self):
+        """Rebuild fonts at current scale."""
+        self.font = pygame.font.Font(None, int(self._base_font * self._ui_scale))
+        self.font_small = pygame.font.Font(None, int(self._base_font_small * self._ui_scale))
+    
+    def set_scale(self, scale: float):
+        """Set UI scale factor."""
+        if abs(scale - self._ui_scale) > 0.01:
+            self._ui_scale = scale
+            self._rebuild_layout()
+            self._rebuild_fonts()
+    
+    def s(self, value: int) -> int:
+        """Scale a value by UI scale factor."""
+        return int(value * self._ui_scale)
     
     def _setup_defaults(self):
         """Set up default action bar assignments."""
@@ -84,28 +112,29 @@ class ActionBar:
         return False
     
     def _use_item_slot(self, index: int, slot: Dict, entity: int) -> bool:
-        """Use an item from the action bar."""
+        """Use an item from the action bar. Searches ALL party inventories (shared potions)."""
         from ..data.loader import data_loader
         
         effect_type = slot.get('effect_type')
         
-        if not esper.has_component(entity, InventoryComp):
-            return False
-        
-        inv = esper.component_for_entity(entity, InventoryComp)
-        
-        # Find all matching consumable items, sorted by effect_value
-        # This way we use SMALLEST potions first (efficient - don't waste big ones)
+        # Search ALL party members' inventories for matching consumables
+        # Party shares potions!
         matching_items = []
-        for i, item in enumerate(inv.items):
-            item_data = data_loader.get_item(item.item_id)
-            if not item_data:
+        for party_ent, (member,) in esper.get_components(PartyMember):
+            if not esper.has_component(party_ent, InventoryComp):
                 continue
+            inv = esper.component_for_entity(party_ent, InventoryComp)
             
-            item_effect_type = item_data.get('effect_type')
-            if item_effect_type == effect_type:
-                effect_value = item_data.get('effect_value', 50)
-                matching_items.append((effect_value, i, item, item_data))
+            for i, item in enumerate(inv.items):
+                item_data = data_loader.get_item(item.item_id)
+                if not item_data:
+                    continue
+                
+                item_effect_type = item_data.get('effect_type')
+                if item_effect_type == effect_type:
+                    effect_value = item_data.get('effect_value', 50)
+                    # Store: (effect_value, inv_index, item, item_data, inventory_owner_ent, inventory)
+                    matching_items.append((effect_value, i, item, item_data, party_ent, inv))
         
         if not matching_items:
             self.event_bus.emit(Event(EventType.NOTIFICATION, {
@@ -118,7 +147,7 @@ class ActionBar:
         matching_items.sort(key=lambda x: x[0])
         
         # Use the smallest potion
-        effect_value, i, item, item_data = matching_items[0]
+        effect_value, i, item, item_data, inv_owner, inv = matching_items[0]
         item_name = item_data.get('name', 'Potion')
         
         # Get character name for notification
@@ -127,23 +156,35 @@ class ActionBar:
         if esper.has_component(entity, CharacterName):
             char_name = esper.component_for_entity(entity, CharacterName).name
         
-        if effect_type == 'heal' and esper.has_component(entity, Health):
-            health = esper.component_for_entity(entity, Health)
-            health.current = min(health.maximum, health.current + effect_value)
+        if effect_type == 'heal':
+            # Can't use health potion on downed/dead
+            if esper.has_component(entity, Downed) or esper.has_component(entity, Dead):
+                self.event_bus.emit(Event(EventType.NOTIFICATION, {
+                    "text": f"{char_name} is downed!",
+                    "color": (200, 150, 150)
+                }))
+                return False
             
-            self.event_bus.emit(Event(EventType.NOTIFICATION, {
-                "text": f"{char_name}: +{effect_value} HP",
-                "color": (100, 255, 150)
-            }))
+            if esper.has_component(entity, Health):
+                health = esper.component_for_entity(entity, Health)
+                health.current = min(health.maximum, health.current + effect_value)
+                
+                self.event_bus.emit(Event(EventType.NOTIFICATION, {
+                    "text": f"{char_name}: +{effect_value} HP",
+                    "color": (100, 255, 150)
+                }))
         
         elif effect_type == 'restore_mana':
             # Mana potions go to party member with lowest mana % who uses magic
-            from ..ecs.components import PartyMember, CharacterClass
+            from ..ecs.components import CharacterClass
             
             best_target = None
             best_mana_pct = 1.0
             
             for ent, (_, mana_comp) in esper.get_components(PartyMember, Mana):
+                # Skip downed/dead - can't give them mana
+                if esper.has_component(ent, Downed) or esper.has_component(ent, Dead):
+                    continue
                 # Skip if full mana
                 if mana_comp.current >= mana_comp.maximum:
                     continue
@@ -268,8 +309,13 @@ class ActionBar:
                 count += item.quantity
         return count
     
-    def render(self, entity: int):
+    def render(self, entity: int, camera_zoom: float = 1.0):
         """Render the action bar."""
+        # Scale UI based on camera zoom - make it big and readable
+        target_scale = camera_zoom / 1.0  # 75% of previous
+        target_scale = max(1.5, min(3.0, target_scale))
+        self.set_scale(target_scale)
+        
         # Background
         total_width = self.NUM_SLOTS * (self.slot_size + self.padding) + self.padding
         bar_rect = pygame.Rect(self.bar_x, self.bar_y, total_width, self.bar_height)
@@ -278,7 +324,7 @@ class ActionBar:
         
         # Label
         label = self.font_small.render("Action Bar", True, COLOR_TEXT_DIM)
-        self.screen.blit(label, (self.bar_x + 5, self.bar_y - 15))
+        self.screen.blit(label, (self.bar_x + self.s(5), self.bar_y - self.s(15)))
         
         # Slots
         for i in range(self.NUM_SLOTS):

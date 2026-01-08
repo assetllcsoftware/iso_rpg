@@ -16,9 +16,9 @@ class Minimap:
     
     def __init__(self, screen: pygame.Surface, size: int = 150):
         self.screen = screen
-        self.size = size
-        self.x = self.screen.get_width() - size - 20
-        self.y = 20
+        self._base_size = size
+        self._ui_scale = 1.0
+        self._rebuild_layout()
         
         # Colors
         self.color_wall = (50, 45, 55)
@@ -39,6 +39,26 @@ class Minimap:
         # Fog of war - explored tiles
         self.explored: Set[Tuple[int, int]] = set()
         self.explore_radius = 6  # How far the player can see
+        self.fog_of_war_enabled = True  # Disable for town
+    
+    def _rebuild_layout(self):
+        """Rebuild layout at current scale."""
+        self.size = int(self._base_size * self._ui_scale)
+        self.x = self.screen.get_width() - self.size - int(20 * self._ui_scale)
+        self.y = int(20 * self._ui_scale)
+    
+    def set_scale(self, scale: float):
+        """Set UI scale factor."""
+        if abs(scale - self._ui_scale) > 0.01:
+            self._ui_scale = scale
+            self._rebuild_layout()
+            # Re-calculate dungeon scale
+            if self.dungeon:
+                self.set_dungeon(self.dungeon)
+    
+    def s(self, value: int) -> int:
+        """Scale a value by UI scale factor."""
+        return int(value * self._ui_scale)
     
     def set_dungeon(self, dungeon):
         """Set dungeon reference and reset fog of war."""
@@ -70,11 +90,18 @@ class Minimap:
                     self.explored.add((x + dx, y + dy))
     
     def is_explored(self, x: int, y: int) -> bool:
-        """Check if a tile has been explored."""
+        """Check if a tile has been explored (always true if fog disabled)."""
+        if not self.fog_of_war_enabled:
+            return True
         return (x, y) in self.explored
     
-    def render(self, center_entity: int = -1):
+    def render(self, center_entity: int = -1, camera_zoom: float = 1.0):
         """Render the minimap with fog of war."""
+        # Scale UI based on camera zoom - make it big and readable
+        target_scale = camera_zoom / 1.0  # 75% of previous
+        target_scale = max(1.5, min(3.0, target_scale))
+        self.set_scale(target_scale)
+        
         # Background
         pygame.draw.rect(self.screen, COLOR_UI_BG, 
                         (self.x, self.y, self.size, self.size))

@@ -18,6 +18,12 @@ class IconGenerator:
         'holy': [(255, 255, 200), (255, 255, 255), (255, 230, 150)],
         'dark': [(80, 50, 100), (120, 80, 150), (50, 30, 60)],
         'physical': [(180, 180, 180), (220, 220, 220), (140, 140, 140)],
+        # Melee warrior abilities
+        'spin': [(255, 120, 50), (255, 180, 100), (200, 80, 30)],  # Orange/red spin
+        'leap': [(100, 200, 255), (150, 230, 255), (60, 150, 200)],  # Sky blue leap
+        'crush': [(200, 100, 50), (255, 150, 80), (150, 60, 30)],  # Brown/orange slam
+        'shield': [(150, 150, 200), (200, 200, 255), (100, 100, 150)],  # Silver/blue shield
+        'warcry': [(255, 200, 50), (255, 255, 100), (200, 150, 30)],  # Gold warcry
     }
     
     # Item type shapes
@@ -169,6 +175,16 @@ class IconGenerator:
             self._draw_poison_effect(surface, center, size, colors)
         elif spell_type == 'nature':
             self._draw_heal_effect(surface, center, size, colors)
+        elif spell_type == 'spin':
+            self._draw_spin_effect(surface, center, size, colors)
+        elif spell_type == 'leap':
+            self._draw_leap_effect(surface, center, size, colors)
+        elif spell_type == 'crush':
+            self._draw_crush_effect(surface, center, size, colors)
+        elif spell_type == 'shield':
+            self._draw_shield_effect(surface, center, size, colors)
+        elif spell_type == 'warcry':
+            self._draw_warcry_effect(surface, center, size, colors)
         else:
             self._draw_generic_effect(surface, center, size, colors)
         
@@ -183,7 +199,7 @@ class IconGenerator:
         
         if any(w in spell_id for w in ['fire', 'flame', 'inferno', 'meteor', 'burn']):
             return 'fire'
-        elif any(w in spell_id for w in ['ice', 'frost', 'blizzard', 'cold', 'freeze']):
+        elif any(w in spell_id for w in ['ice', 'frost', 'blizzard', 'cold', 'freeze', 'shard']):
             return 'ice'
         elif any(w in spell_id for w in ['lightning', 'thunder', 'shock', 'bolt', 'chain']):
             return 'lightning'
@@ -195,6 +211,16 @@ class IconGenerator:
             return 'holy'
         elif any(w in spell_id for w in ['dark', 'shadow', 'death', 'curse']):
             return 'dark'
+        elif any(w in spell_id for w in ['whirl', 'spin', 'wind']):
+            return 'spin'
+        elif any(w in spell_id for w in ['leap', 'jump', 'strike']):
+            return 'leap'
+        elif any(w in spell_id for w in ['crush', 'heavy', 'smash', 'slam']):
+            return 'crush'
+        elif any(w in spell_id for w in ['bash', 'shield', 'block']):
+            return 'shield'
+        elif any(w in spell_id for w in ['cry', 'shout', 'roar', 'battle']):
+            return 'warcry'
         else:
             return 'physical'
     
@@ -306,6 +332,92 @@ class IconGenerator:
             end_x = center + int(math.cos(angle) * size // 3)
             end_y = center + int(math.sin(angle) * size // 3)
             pygame.draw.line(surface, colors[1], (center, center), (end_x, end_y), 2)
+    
+    def _draw_spin_effect(self, surface, center, size, colors):
+        """Draw whirlwind/spin effect - circular motion lines."""
+        # Circular swirl pattern
+        for i in range(3):
+            angle_start = i * math.pi * 2 / 3
+            for j in range(8):
+                angle = angle_start + j * 0.15
+                r = size // 4 + j * (size // 16)
+                x = center + int(math.cos(angle) * r)
+                y = center + int(math.sin(angle) * r)
+                pygame.draw.circle(surface, colors[0] if j < 4 else colors[1], (x, y), 2)
+        # Center blade
+        pygame.draw.polygon(surface, colors[1], [
+            (center, center - size // 4),
+            (center - size // 8, center),
+            (center, center + size // 6),
+            (center + size // 8, center),
+        ])
+    
+    def _draw_leap_effect(self, surface, center, size, colors):
+        """Draw leap strike effect - upward arrow with motion lines."""
+        # Upward arrow
+        pygame.draw.polygon(surface, colors[0], [
+            (center, center - size // 3),
+            (center - size // 4, center),
+            (center - size // 8, center),
+            (center - size // 8, center + size // 4),
+            (center + size // 8, center + size // 4),
+            (center + size // 8, center),
+            (center + size // 4, center),
+        ])
+        # Motion lines
+        for i in range(3):
+            y = center + size // 6 + i * 4
+            pygame.draw.line(surface, colors[1], (center - size // 6, y), (center + size // 6, y), 1)
+    
+    def _draw_crush_effect(self, surface, center, size, colors):
+        """Draw crushing blow effect - hammer/fist coming down."""
+        # Fist/hammer shape
+        pygame.draw.rect(surface, colors[0], (center - size // 6, center - size // 4, size // 3, size // 3))
+        pygame.draw.rect(surface, colors[1], (center - size // 8, center - size // 5, size // 4, size // 4))
+        # Impact lines below
+        for i in range(5):
+            offset = (i - 2) * size // 8
+            pygame.draw.line(surface, colors[2], 
+                           (center + offset, center + size // 6),
+                           (center + offset * 1.5, center + size // 3), 2)
+        # Ground crack
+        pygame.draw.line(surface, colors[2], (center - size // 3, center + size // 4), 
+                        (center + size // 3, center + size // 4), 2)
+    
+    def _draw_shield_effect(self, surface, center, size, colors):
+        """Draw shield bash effect - shield with impact."""
+        # Shield shape
+        pygame.draw.polygon(surface, colors[0], [
+            (center, center - size // 3),
+            (center - size // 3, center - size // 6),
+            (center - size // 3, center + size // 6),
+            (center, center + size // 3),
+            (center + size // 3, center + size // 6),
+            (center + size // 3, center - size // 6),
+        ])
+        # Shield highlight
+        pygame.draw.polygon(surface, colors[1], [
+            (center, center - size // 4),
+            (center - size // 5, center - size // 8),
+            (center - size // 5, center + size // 8),
+            (center, center + size // 4),
+        ])
+        # Impact star on right
+        for angle in [0, math.pi/4, -math.pi/4]:
+            end_x = center + size // 3 + int(math.cos(angle) * size // 6)
+            end_y = center + int(math.sin(angle) * size // 6)
+            pygame.draw.line(surface, colors[2], (center + size // 3, center), (end_x, end_y), 2)
+    
+    def _draw_warcry_effect(self, surface, center, size, colors):
+        """Draw battle cry effect - sound waves emanating outward."""
+        # Mouth/head center
+        pygame.draw.circle(surface, colors[0], (center - size // 6, center), size // 6)
+        # Sound wave arcs
+        for i in range(3):
+            r = size // 4 + i * size // 8
+            pygame.draw.arc(surface, colors[1], 
+                          (center - size // 8 - r, center - r, r * 2, r * 2),
+                          -math.pi/3, math.pi/3, 2)
     
     def _generate_item_icon(self, item_type: str, rarity: int, size: int) -> pygame.Surface:
         """Generate an item icon."""

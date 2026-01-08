@@ -40,7 +40,7 @@ from .ai import (
 # Rendering
 from .rendering import (
     Sprite, Animation, AnimationState, RenderOffset,
-    HealthBar, DamageNumber, VisualEffect
+    HealthBar, DamageNumber, VisualEffect, LightningBolt
 )
 
 # Tags

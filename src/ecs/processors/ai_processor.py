@@ -402,7 +402,8 @@ class AIProcessor(esper.Processor):
     def _find_ally_needing_heal(self, pos: Position) -> Optional[int]:
         """Find an ally that needs healing."""
         for ent, (ally_pos, _, health) in esper.get_components(Position, PartyMember, Health):
-            if esper.has_component(ent, Dead):
+            # Skip dead or downed allies - can't heal them
+            if esper.has_component(ent, Dead) or esper.has_component(ent, Downed):
                 continue
             
             # Check if low health

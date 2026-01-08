@@ -11,8 +11,9 @@ from ..core.constants import (
 )
 from ..ecs.components import (
     Health, Mana, Attributes, SkillLevels, SkillXP, CharacterLevel,
-    CharacterName, Equipment, Inventory as InventoryComp, PartyMember
+    CharacterName, Equipment, Inventory as InventoryComp, PartyMember, Weapon
 )
+from ..data.loader import data_loader
 
 
 class InventoryUI:
@@ -33,18 +34,26 @@ class InventoryUI:
         self.party_entities: List[int] = []
         self.party_index: int = 0
         
+        # UI scaling
+        self._ui_scale = 1.0
+        self._base_font = 24
+        self._base_font_large = 32
+        self._base_font_small = 18
+        self._base_font_title = 40
+        self._base_panel_width = 320
+        self._base_panel_height = 500
+        self._base_slot_size = 48
+        self._base_padding = 12
+        
         # Fonts
         pygame.font.init()
-        self.font = pygame.font.Font(None, 24)
-        self.font_large = pygame.font.Font(None, 32)
-        self.font_small = pygame.font.Font(None, 18)
-        self.font_title = pygame.font.Font(None, 40)
+        self._rebuild_fonts()
         
-        # Layout
-        self.panel_width = 320
-        self.panel_height = 500
-        self.slot_size = 48
-        self.padding = 12
+        # Layout (will be scaled)
+        self.panel_width = self._base_panel_width
+        self.panel_height = self._base_panel_height
+        self.slot_size = self._base_slot_size
+        self.padding = self._base_padding
         
         # Panel positions (calculated dynamically in render)
         self.left_panel = pygame.Rect(0, 0, self.panel_width, self.panel_height)
@@ -59,34 +68,58 @@ class InventoryUI:
         self.inv_slots: List[pygame.Rect] = []
         self._setup_inv_slots()
     
+    def _rebuild_fonts(self):
+        """Rebuild fonts with current scale."""
+        self.font = pygame.font.Font(None, int(self._base_font * self._ui_scale))
+        self.font_large = pygame.font.Font(None, int(self._base_font_large * self._ui_scale))
+        self.font_small = pygame.font.Font(None, int(self._base_font_small * self._ui_scale))
+        self.font_title = pygame.font.Font(None, int(self._base_font_title * self._ui_scale))
+    
+    def set_scale(self, scale: float):
+        """Set UI scale factor and recalculate dimensions."""
+        if abs(scale - self._ui_scale) > 0.01:
+            self._ui_scale = scale
+            self._rebuild_fonts()
+            # Update layout dimensions
+            self.panel_width = self.s(self._base_panel_width)
+            self.panel_height = self.s(self._base_panel_height)
+            self.slot_size = self.s(self._base_slot_size)
+            self.padding = self.s(self._base_padding)
+    
+    def s(self, value: int) -> int:
+        """Scale a value by the UI scale factor."""
+        return int(value * self._ui_scale)
+    
     def _setup_equip_slots(self) -> Dict[str, pygame.Rect]:
         """Setup equipment slot positions on character silhouette."""
         cx = self.left_panel.x + self.panel_width // 2
-        cy = self.left_panel.y + 180
+        cy = self.left_panel.y + self.s(180)
+        half_slot = self.slot_size // 2
         
         return {
-            'head': pygame.Rect(cx - 24, cy - 80, self.slot_size, self.slot_size),
-            'amulet': pygame.Rect(cx + 35, cy - 50, self.slot_size, self.slot_size),
-            'chest': pygame.Rect(cx - 24, cy - 20, self.slot_size, self.slot_size),
-            'main_hand': pygame.Rect(cx - 85, cy - 10, self.slot_size, self.slot_size),
-            'off_hand': pygame.Rect(cx + 35, cy - 10, self.slot_size, self.slot_size),
-            'hands': pygame.Rect(cx - 85, cy + 45, self.slot_size, self.slot_size),
-            'ring_1': pygame.Rect(cx - 85, cy + 100, self.slot_size, self.slot_size),
-            'ring_2': pygame.Rect(cx + 35, cy + 100, self.slot_size, self.slot_size),
-            'legs': pygame.Rect(cx - 24, cy + 45, self.slot_size, self.slot_size),
-            'feet': pygame.Rect(cx - 24, cy + 100, self.slot_size, self.slot_size),
+            'head': pygame.Rect(cx - half_slot, cy - self.s(80), self.slot_size, self.slot_size),
+            'amulet': pygame.Rect(cx + self.s(35), cy - self.s(50), self.slot_size, self.slot_size),
+            'chest': pygame.Rect(cx - half_slot, cy - self.s(20), self.slot_size, self.slot_size),
+            'main_hand': pygame.Rect(cx - self.s(85), cy - self.s(10), self.slot_size, self.slot_size),
+            'off_hand': pygame.Rect(cx + self.s(35), cy - self.s(10), self.slot_size, self.slot_size),
+            'hands': pygame.Rect(cx - self.s(85), cy + self.s(45), self.slot_size, self.slot_size),
+            'ring_1': pygame.Rect(cx - self.s(85), cy + self.s(100), self.slot_size, self.slot_size),
+            'ring_2': pygame.Rect(cx + self.s(35), cy + self.s(100), self.slot_size, self.slot_size),
+            'legs': pygame.Rect(cx - half_slot, cy + self.s(45), self.slot_size, self.slot_size),
+            'feet': pygame.Rect(cx - half_slot, cy + self.s(100), self.slot_size, self.slot_size),
         }
     
     def _setup_inv_slots(self):
         """Setup inventory grid slots."""
         start_x = self.right_panel.x + self.padding
-        start_y = self.right_panel.y + 100
+        start_y = self.right_panel.y + self.s(100)
         
         self.inv_slots = []
+        gap = self.s(4)
         for row in range(self.inv_rows):
             for col in range(self.inv_cols):
-                x = start_x + col * (self.slot_size + 4)
-                y = start_y + row * (self.slot_size + 4)
+                x = start_x + col * (self.slot_size + gap)
+                y = start_y + row * (self.slot_size + gap)
                 self.inv_slots.append(pygame.Rect(x, y, self.slot_size, self.slot_size))
     
     def toggle(self):
@@ -159,7 +192,7 @@ class InventoryUI:
         """Handle mouse click."""
         # Check party tabs
         for i, ent in enumerate(self.party_entities):
-            tab_rect = pygame.Rect(60 + i * 110, 20, 100, 30)
+            tab_rect = pygame.Rect(self.s(60) + i * self.s(110), self.s(20), self.s(100), self.s(30))
             if tab_rect.collidepoint(pos):
                 self.selected_entity = ent
                 return True
@@ -288,7 +321,56 @@ class InventoryUI:
         
         self.dragging_item = None
         self.drag_source = None
+        
+        # Sync weapon component if main_hand changed
+        if (target_equip_slot == 'main_hand' or 
+            (source_type == 'equipment' and source_idx == 'main_hand')):
+            self._sync_weapon_component()
+        
         return True
+    
+    def _sync_weapon_component(self):
+        """Update Weapon component to match equipped main_hand item."""
+        if self.selected_entity < 0:
+            return
+        
+        ent = self.selected_entity
+        if not esper.has_component(ent, Equipment):
+            return
+        
+        equip = esper.component_for_entity(ent, Equipment)
+        main_hand = equip.get('main_hand')
+        
+        if main_hand:
+            # Get item data
+            item_data = data_loader.get_item(main_hand)
+            if item_data:
+                # Update or create Weapon component
+                if esper.has_component(ent, Weapon):
+                    weapon = esper.component_for_entity(ent, Weapon)
+                    weapon.item_id = main_hand
+                    weapon.damage = item_data.get('damage', 10)
+                    weapon.attack_range = item_data.get('attack_range', 1.5)
+                    weapon.attack_speed = item_data.get('attack_speed', 1.0)
+                    weapon.weapon_type = item_data.get('weapon_type', 'melee')
+                    weapon.fire_damage = item_data.get('fire_damage', 0)
+                    weapon.ice_damage = item_data.get('ice_damage', 0)
+                    weapon.lightning_damage = item_data.get('lightning_damage', 0)
+                else:
+                    esper.add_component(ent, Weapon(
+                        item_id=main_hand,
+                        damage=item_data.get('damage', 10),
+                        attack_range=item_data.get('attack_range', 1.5),
+                        attack_speed=item_data.get('attack_speed', 1.0),
+                        weapon_type=item_data.get('weapon_type', 'melee'),
+                        fire_damage=item_data.get('fire_damage', 0),
+                        ice_damage=item_data.get('ice_damage', 0),
+                        lightning_damage=item_data.get('lightning_damage', 0),
+                    ))
+        else:
+            # No weapon equipped - remove Weapon component or reset to default
+            if esper.has_component(ent, Weapon):
+                esper.remove_component(ent, Weapon)
     
     def _can_equip_in_slot(self, item_slot: str, equip_slot: str) -> bool:
         """Check if item can be equipped in the given slot."""
@@ -344,21 +426,26 @@ class InventoryUI:
                 self.hover_equip_slot = slot_name
                 return
     
-    def render(self):
+    def render(self, camera_zoom: float = 1.0):
         """Render inventory UI."""
         if not self.visible:
             return
+        
+        # Update UI scale based on camera zoom
+        target_scale = camera_zoom / 1.0
+        target_scale = max(1.5, min(3.0, target_scale))
+        self.set_scale(target_scale)
         
         # Update panel positions based on actual screen size
         screen_w = self.screen.get_width()
         screen_h = self.screen.get_height()
         
         self.left_panel = pygame.Rect(
-            50, (screen_h - self.panel_height) // 2,
+            self.s(50), (screen_h - self.panel_height) // 2,
             self.panel_width, self.panel_height
         )
         self.right_panel = pygame.Rect(
-            screen_w - self.panel_width - 50,
+            screen_w - self.panel_width - self.s(50),
             (screen_h - self.panel_height) // 2,
             self.panel_width, self.panel_height
         )
@@ -395,7 +482,7 @@ class InventoryUI:
     def _render_party_tabs(self):
         """Render party member tabs."""
         for i, ent in enumerate(self.party_entities):
-            tab_rect = pygame.Rect(60 + i * 110, 20, 100, 30)
+            tab_rect = pygame.Rect(self.s(60) + i * self.s(110), self.s(20), self.s(100), self.s(30))
             
             is_selected = ent == self.selected_entity
             if is_selected:
@@ -411,7 +498,7 @@ class InventoryUI:
                 name = esper.component_for_entity(ent, CharacterName).name
             
             name_surf = self.font.render(name[:12], True, COLOR_TEXT)
-            self.screen.blit(name_surf, (tab_rect.x + 8, tab_rect.y + 6))
+            self.screen.blit(name_surf, (tab_rect.x + self.s(8), tab_rect.y + self.s(6)))
     
     def _render_character_panel(self):
         """Render character stats and equipment."""
@@ -439,7 +526,7 @@ class InventoryUI:
             level = esper.component_for_entity(ent, CharacterLevel).level
         
         level_text = self.font.render(f"Level {level}", True, COLOR_TEXT)
-        self.screen.blit(level_text, (panel.x + self.padding, panel.y + 50))
+        self.screen.blit(level_text, (panel.x + self.padding, panel.y + self.s(50)))
         
         # Equipment slots
         for slot_name, rect in self.equip_slots.items():
@@ -451,7 +538,7 @@ class InventoryUI:
             self._render_slot(rect, item, slot_name)
         
         # Stats
-        self._render_stats(panel.x + self.padding, panel.y + 320)
+        self._render_stats(panel.x + self.padding, panel.y + self.s(320))
     
     def _render_inventory_panel(self):
         """Render inventory grid."""
@@ -508,12 +595,12 @@ class InventoryUI:
             # Rarity color
             rarity_color = RARITY_COLORS.get(rarity, (180, 180, 180))
             
-            inner = rect.inflate(-4, -4)
+            inner = rect.inflate(-self.s(4), -self.s(4))
             pygame.draw.rect(self.screen, (*rarity_color[:3], 100), inner)
             pygame.draw.rect(self.screen, rarity_color, inner, 2)
             
             # Item icon (use item_id for specific icon matching)
-            icon_size = min(rect.width, rect.height) - 8
+            icon_size = min(rect.width, rect.height) - self.s(8)
             icon = icon_generator.get_item_icon(icon_type, rarity, icon_size)
             icon_rect = icon.get_rect(center=rect.center)
             self.screen.blit(icon, icon_rect)
@@ -522,7 +609,7 @@ class InventoryUI:
             if slot_name:
                 short_name = name[:8] + "..." if len(name) > 8 else name
                 name_text = self.font_small.render(short_name, True, rarity_color)
-                name_rect = name_text.get_rect(centerx=rect.centerx, top=rect.bottom + 2)
+                name_rect = name_text.get_rect(centerx=rect.centerx, top=rect.bottom + self.s(2))
                 self.screen.blit(name_text, name_rect)
         elif slot_name:
             # Empty slot label
@@ -548,16 +635,16 @@ class InventoryUI:
             ]
             
             for i, (name, value, color) in enumerate(stats):
-                stat_x = x + i * 90
+                stat_x = x + i * self.s(90)
                 
                 label = self.font_small.render(name, True, color)
                 self.screen.blit(label, (stat_x, y))
                 
                 val_text = self.font_large.render(str(value), True, COLOR_TEXT)
-                self.screen.blit(val_text, (stat_x, y + 15))
+                self.screen.blit(val_text, (stat_x, y + self.s(15)))
         
         # Health/Mana
-        y += 50
+        y += self.s(50)
         if esper.has_component(ent, Health):
             health = esper.component_for_entity(ent, Health)
             hp_text = self.font_small.render(f"HP: {health.current}/{health.maximum}", True, COLOR_HEALTH)
@@ -566,7 +653,7 @@ class InventoryUI:
         if esper.has_component(ent, Mana):
             mana = esper.component_for_entity(ent, Mana)
             mp_text = self.font_small.render(f"MP: {mana.current}/{mana.maximum}", True, COLOR_MANA)
-            self.screen.blit(mp_text, (x + 100, y))
+            self.screen.blit(mp_text, (x + self.s(100), y))
     
     def _render_tooltip(self):
         """Render item tooltip."""
@@ -681,11 +768,12 @@ class InventoryUI:
         
         # Render tooltip
         mouse_pos = pygame.mouse.get_pos()
-        width = max(self.font_small.size(line)[0] for line in lines) + 20
-        height = len(lines) * 18 + 10
+        line_height = self.s(18)
+        width = max(self.font_small.size(line)[0] for line in lines) + self.s(20)
+        height = len(lines) * line_height + self.s(10)
         
-        x = min(mouse_pos[0] + 15, self.screen.get_width() - width - 10)
-        y = min(mouse_pos[1] + 15, self.screen.get_height() - height - 10)
+        x = min(mouse_pos[0] + self.s(15), self.screen.get_width() - width - self.s(10))
+        y = min(mouse_pos[1] + self.s(15), self.screen.get_height() - height - self.s(10))
         
         tooltip_rect = pygame.Rect(x, y, width, height)
         pygame.draw.rect(self.screen, (20, 18, 25), tooltip_rect)
@@ -694,7 +782,7 @@ class InventoryUI:
         for i, line in enumerate(lines):
             color = line_colors[i] if i < len(line_colors) else COLOR_TEXT_DIM
             text = self.font_small.render(line, True, color)
-            self.screen.blit(text, (x + 10, y + 5 + i * 18))
+            self.screen.blit(text, (x + self.s(10), y + self.s(5) + i * line_height))
     
     def _render_equip_tooltip(self):
         """Render tooltip for equipped item."""
@@ -712,15 +800,15 @@ class InventoryUI:
             slot_name = self.hover_equip_slot.replace('_', ' ').title()
             mouse_pos = pygame.mouse.get_pos()
             text = self.font_small.render(f"Empty {slot_name} slot", True, COLOR_TEXT_DIM)
-            width = text.get_width() + 20
-            height = 24
+            width = text.get_width() + self.s(20)
+            height = self.s(24)
             
-            x = min(mouse_pos[0] + 15, self.screen.get_width() - width - 10)
-            y = min(mouse_pos[1] + 15, self.screen.get_height() - height - 10)
+            x = min(mouse_pos[0] + self.s(15), self.screen.get_width() - width - self.s(10))
+            y = min(mouse_pos[1] + self.s(15), self.screen.get_height() - height - self.s(10))
             
             pygame.draw.rect(self.screen, (20, 18, 25), (x, y, width, height))
             pygame.draw.rect(self.screen, COLOR_UI_BORDER, (x, y, width, height), 1)
-            self.screen.blit(text, (x + 10, y + 4))
+            self.screen.blit(text, (x + self.s(10), y + self.s(4)))
             return
         
         # Look up item data
@@ -755,11 +843,12 @@ class InventoryUI:
         
         # Render tooltip
         mouse_pos = pygame.mouse.get_pos()
-        width = max(self.font_small.size(line)[0] for line in lines) + 20
-        height = len(lines) * 18 + 10
+        line_height = self.s(18)
+        width = max(self.font_small.size(line)[0] for line in lines) + self.s(20)
+        height = len(lines) * line_height + self.s(10)
         
-        x = min(mouse_pos[0] + 15, self.screen.get_width() - width - 10)
-        y = min(mouse_pos[1] + 15, self.screen.get_height() - height - 10)
+        x = min(mouse_pos[0] + self.s(15), self.screen.get_width() - width - self.s(10))
+        y = min(mouse_pos[1] + self.s(15), self.screen.get_height() - height - self.s(10))
         
         tooltip_rect = pygame.Rect(x, y, width, height)
         pygame.draw.rect(self.screen, (20, 18, 25), tooltip_rect)
@@ -768,7 +857,7 @@ class InventoryUI:
         for i, line in enumerate(lines):
             color = line_colors[i] if i < len(line_colors) else COLOR_TEXT_DIM
             text = self.font_small.render(line, True, color)
-            self.screen.blit(text, (x + 10, y + 5 + i * 18))
+            self.screen.blit(text, (x + self.s(10), y + self.s(5) + i * line_height))
     
     def _render_dragged_item(self):
         """Render item being dragged."""
@@ -778,7 +867,8 @@ class InventoryUI:
             return
         
         mouse_pos = pygame.mouse.get_pos()
-        rect = pygame.Rect(mouse_pos[0] - 24, mouse_pos[1] - 24, 
+        half_slot = self.slot_size // 2
+        rect = pygame.Rect(mouse_pos[0] - half_slot, mouse_pos[1] - half_slot, 
                           self.slot_size, self.slot_size)
         
         # Get item data

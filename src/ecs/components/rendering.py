@@ -73,5 +73,20 @@ class VisualEffect:
     """A visual effect (spell impact, etc.)."""
     effect_type: str = ""  # fire_explosion, ice_shatter, etc.
     timer: float = 0.5
+    duration: float = 0.5  # Total duration for animation progress
+    radius: float = 0.0    # Current radius (or max radius for expanding effects)
+    color: tuple = None    # Override color
     frame: int = 0
+
+
+@dataclass
+class LightningBolt:
+    """A lightning bolt visual connecting two points."""
+    start_x: float = 0.0
+    start_y: float = 0.0
+    end_x: float = 0.0
+    end_y: float = 0.0
+    timer: float = 0.4  # How long visible
+    # Pre-generated jagged points (list of (x,y) tuples in world coords)
+    segments: list = None
 

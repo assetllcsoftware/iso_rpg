@@ -15,11 +15,11 @@ from ..world.town_map import TownMap
 from ..ui.shop import ShopUI
 
 
-# NPC definitions
+# NPC definitions - use unique town NPC sprites
 TOWN_NPCS = [
-    {'name': 'Blacksmith', 'type': 'blacksmith', 'x': 10, 'y': 14, 'sprite': 'orc'},
-    {'name': 'Alchemist', 'type': 'alchemist', 'x': 29, 'y': 14, 'sprite': 'mage'},
-    {'name': 'Innkeeper', 'type': 'inn', 'x': 11, 'y': 26, 'sprite': 'hero'},
+    {'name': 'Blacksmith', 'type': 'blacksmith', 'x': 10, 'y': 14, 'sprite': 'blacksmith'},
+    {'name': 'Alchemist', 'type': 'alchemist', 'x': 29, 'y': 14, 'sprite': 'alchemist'},
+    {'name': 'Innkeeper', 'type': 'inn', 'x': 11, 'y': 26, 'sprite': 'innkeeper'},
 ]
 
 
@@ -231,17 +231,12 @@ class TownScene:
                                border_radius=3)
                 self.screen.blit(text, (sx - text.get_width()//2, sy))
         
-        # Gold
-        gold = 0
-        for ent, (member, g) in esper.get_components(PartyMember, Gold):
-            if member.party_index == 0:
-                gold = g.amount
-                break
-        gold_text = self.font.render(f"Gold: {gold}", True, COLOR_GOLD)
-        pygame.draw.rect(self.screen, (30, 30, 40), (10, 10, gold_text.get_width() + 20, 35), border_radius=5)
-        self.screen.blit(gold_text, (20, 17))
+        # Shop UI (render first so prompts/hints appear on top when shop is closed)
+        if self.shop_ui.visible:
+            self.shop_ui.render(camera.zoom)
+            return  # Don't render town prompts when shop is open
         
-        # Prompt
+        # Prompt (only when shop is closed)
         screen_w, screen_h = self.screen.get_size()
         if self.nearby_npc:
             text = f"SPACE: {'Leave' if self.nearby_npc_type == 'portal' else 'Talk to ' + self.nearby_npc}"
@@ -250,9 +245,6 @@ class TownScene:
             pygame.draw.rect(self.screen, (40, 60, 80), (bx, screen_h - 80, prompt.get_width() + 30, 40), border_radius=8)
             self.screen.blit(prompt, (bx + 15, screen_h - 72))
         
-        # Controls hint
+        # Controls hint (only when shop is closed)
         hint = self.font_small.render("Right-click: Move | SPACE: Talk | ESC: Leave", True, COLOR_TEXT_DIM)
         self.screen.blit(hint, (screen_w//2 - hint.get_width()//2, screen_h - 30))
-        
-        # Shop
-        self.shop_ui.render()

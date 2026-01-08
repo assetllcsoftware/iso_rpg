@@ -35,16 +35,43 @@ class HUD:
         self.event_bus = event_bus
         
         pygame.font.init()
-        self.font_small = pygame.font.Font(None, 18)
-        self.font_medium = pygame.font.Font(None, 24)
-        self.font_large = pygame.font.Font(None, 32)
-        self.font_title = pygame.font.Font(None, 42)
+        # Base font sizes (will be scaled)
+        self._base_font_small = 18
+        self._base_font_medium = 24
+        self._base_font_large = 32
+        self._base_font_title = 42
+        
+        # Current scale factor (1.0 = default)
+        self._ui_scale = 1.0
+        self._rebuild_fonts()
         
         # Town portal button
         self.portal_button_rect = pygame.Rect(20, 0, 60, 60)  # Y set dynamically
     
-    def render(self, fps: float = 0.0):
+    def _rebuild_fonts(self):
+        """Rebuild fonts at current scale."""
+        self.font_small = pygame.font.Font(None, int(self._base_font_small * self._ui_scale))
+        self.font_medium = pygame.font.Font(None, int(self._base_font_medium * self._ui_scale))
+        self.font_large = pygame.font.Font(None, int(self._base_font_large * self._ui_scale))
+        self.font_title = pygame.font.Font(None, int(self._base_font_title * self._ui_scale))
+    
+    def set_scale(self, scale: float):
+        """Set UI scale factor."""
+        if abs(scale - self._ui_scale) > 0.01:  # Only rebuild if changed
+            self._ui_scale = scale
+            self._rebuild_fonts()
+    
+    def s(self, value: int) -> int:
+        """Scale a value by UI scale factor."""
+        return int(value * self._ui_scale)
+    
+    def render(self, fps: float = 0.0, camera_zoom: float = 1.0):
         """Render the HUD."""
+        # Scale UI based on camera zoom - make it big and readable
+        target_scale = camera_zoom / 1.0  # 75% of previous
+        target_scale = max(1.5, min(3.0, target_scale))
+        self.set_scale(target_scale)
+        
         # Party portraits (top left)
         self._render_party_portraits()
         
@@ -79,10 +106,11 @@ class HUD:
         """Render the town portal button."""
         # Position below party portraits (after up to 3 members)
         num_members = sum(1 for _ in esper.get_components(PartyMember, Health))
-        panel_height = 115 + 5  # Match _render_party_portraits
-        y = 20 + num_members * panel_height + 10
+        panel_height = self.s(115) + self.s(5)  # Match _render_party_portraits
+        y = self.s(20) + num_members * panel_height + self.s(10)
         
-        self.portal_button_rect = pygame.Rect(20, y, 60, 60)
+        btn_size = self.s(60)
+        self.portal_button_rect = pygame.Rect(self.s(20), y, btn_size, btn_size)
         
         # Check if hovered
         mouse_pos = pygame.mouse.get_pos()
@@ -90,8 +118,8 @@ class HUD:
         
         # Background
         bg_color = (50, 80, 120) if is_hovered else (30, 50, 90)
-        pygame.draw.rect(self.screen, bg_color, self.portal_button_rect, border_radius=8)
-        pygame.draw.rect(self.screen, (80, 140, 200), self.portal_button_rect, 2, border_radius=8)
+        pygame.draw.rect(self.screen, bg_color, self.portal_button_rect, border_radius=self.s(8))
+        pygame.draw.rect(self.screen, (80, 140, 200), self.portal_button_rect, 2, border_radius=self.s(8))
         
         # Portal swirl effect
         cx, cy = self.portal_button_rect.center
@@ -100,44 +128,45 @@ class HUD:
         t = time.time() * 2
         
         # Outer ring
-        pygame.draw.circle(self.screen, (60, 120, 180), (cx, cy), 22, 2)
+        pygame.draw.circle(self.screen, (60, 120, 180), (cx, cy), self.s(22), 2)
         
         # Inner swirl
         for i in range(6):
             angle = t + i * (math.pi / 3)
-            r = 12 + math.sin(t * 2 + i) * 4
+            r = self.s(12) + math.sin(t * 2 + i) * self.s(4)
             px = cx + math.cos(angle) * r
             py = cy + math.sin(angle) * r
-            pygame.draw.circle(self.screen, (100, 180, 255), (int(px), int(py)), 3)
+            pygame.draw.circle(self.screen, (100, 180, 255), (int(px), int(py)), self.s(3))
         
         # Center
-        pygame.draw.circle(self.screen, (150, 200, 255), (cx, cy), 6)
+        pygame.draw.circle(self.screen, (150, 200, 255), (cx, cy), self.s(6))
         
         # Label
         label = self.font_small.render("H", True, (200, 230, 255))
-        self.screen.blit(label, (self.portal_button_rect.right - 14, self.portal_button_rect.top + 2))
+        self.screen.blit(label, (self.portal_button_rect.right - self.s(14), self.portal_button_rect.top + 2))
         
         # "Town" text below
         town_text = self.font_small.render("Town", True, COLOR_TEXT_DIM)
-        self.screen.blit(town_text, (self.portal_button_rect.x + 12, self.portal_button_rect.bottom + 2))
+        self.screen.blit(town_text, (self.portal_button_rect.x + self.s(12), self.portal_button_rect.bottom + 2))
     
     def _render_party_portraits(self):
         """Render party member portraits and status."""
-        y_offset = 20
-        panel_height = 115  # Taller to fit XP bars
+        y_offset = self.s(20)
+        panel_height = self.s(115)  # Taller to fit XP bars
+        panel_width = self.s(200)
         
         for ent, (member, health) in esper.get_components(PartyMember, Health):
-            x = 20
-            y = y_offset + member.party_index * (panel_height + 5)
+            x = self.s(20)
+            y = y_offset + member.party_index * (panel_height + self.s(5))
             
             # Background
             bg_color = COLOR_UI_BG if not esper.has_component(ent, Selected) else (45, 42, 55)
-            pygame.draw.rect(self.screen, bg_color, (x, y, 200, panel_height))
-            pygame.draw.rect(self.screen, COLOR_UI_BORDER, (x, y, 200, panel_height), 2)
+            pygame.draw.rect(self.screen, bg_color, (x, y, panel_width, panel_height))
+            pygame.draw.rect(self.screen, COLOR_UI_BORDER, (x, y, panel_width, panel_height), 2)
             
             # Selection indicator
             if esper.has_component(ent, Selected):
-                pygame.draw.rect(self.screen, COLOR_UI_ACCENT, (x, y, 4, panel_height))
+                pygame.draw.rect(self.screen, COLOR_UI_ACCENT, (x, y, self.s(4), panel_height))
             
             # Name
             name = "Hero"
@@ -145,7 +174,7 @@ class HUD:
                 name = esper.component_for_entity(ent, CharacterName).name
             
             name_surf = self.font_medium.render(name, True, COLOR_TEXT)
-            self.screen.blit(name_surf, (x + 60, y + 8))
+            self.screen.blit(name_surf, (x + self.s(60), y + self.s(8)))
             
             # Level
             level = 1
@@ -153,17 +182,18 @@ class HUD:
                 level = esper.component_for_entity(ent, CharacterLevel).level
             
             level_surf = self.font_small.render(f"Lv.{level}", True, COLOR_TEXT_DIM)
-            self.screen.blit(level_surf, (x + 160, y + 12))
+            self.screen.blit(level_surf, (x + self.s(160), y + self.s(12)))
             
-            # Portrait - use procedural icon
-            portrait = icon_generator.get_character_portrait(name, 44)
-            self.screen.blit(portrait, (x + 8, y + 8))
+            # Portrait - use procedural icon (scale it)
+            portrait_size = self.s(44)
+            portrait = icon_generator.get_character_portrait(name, portrait_size)
+            self.screen.blit(portrait, (x + self.s(8), y + self.s(8)))
             
             # Health bar
-            bar_x = x + 60
-            bar_y = y + 35
-            bar_w = 130
-            bar_h = 14
+            bar_x = x + self.s(60)
+            bar_y = y + self.s(35)
+            bar_w = self.s(130)
+            bar_h = self.s(14)
             
             pygame.draw.rect(self.screen, (40, 35, 45), (bar_x, bar_y, bar_w, bar_h))
             health_w = int(bar_w * health.percent)
@@ -172,13 +202,13 @@ class HUD:
             
             health_text = f"{health.current}/{health.maximum}"
             health_surf = self.font_small.render(health_text, True, COLOR_TEXT)
-            self.screen.blit(health_surf, (bar_x + 5, bar_y + 1))
+            self.screen.blit(health_surf, (bar_x + self.s(5), bar_y + 1))
             
             # Mana bar
             if esper.has_component(ent, Mana):
                 mana = esper.component_for_entity(ent, Mana)
-                bar_y = y + 52
-                bar_h = 10
+                bar_y = y + self.s(52)
+                bar_h = self.s(10)
                 
                 pygame.draw.rect(self.screen, (35, 40, 50), (bar_x, bar_y, bar_w, bar_h))
                 mana_w = int(bar_w * mana.percent)
@@ -186,7 +216,7 @@ class HUD:
                 pygame.draw.rect(self.screen, COLOR_UI_BORDER, (bar_x, bar_y, bar_w, bar_h), 1)
             
             # Skill XP bars (compact 2x2 grid)
-            self._render_skill_xp_bars(ent, x + 8, y + 68)
+            self._render_skill_xp_bars(ent, x + self.s(8), y + self.s(68))
     
     def _render_skill_xp_bars(self, ent: int, x: int, y: int):
         """Render compact skill XP bars for a character."""
@@ -209,15 +239,15 @@ class HUD:
             ("nature_magic", "N", (80, 200, 180)),   # Teal
         ]
         
-        bar_w = 90
-        bar_h = 8
+        bar_w = self.s(90)
+        bar_h = self.s(8)
         
         for i, (skill_name, label, color) in enumerate(skills):
             # 2x2 grid layout
             col = i % 2
             row = i // 2
-            bx = x + col * 95
-            by = y + row * 18
+            bx = x + col * self.s(95)
+            by = y + row * self.s(18)
             
             level = skill_levels.get(skill_name)
             xp = skill_xp.get(skill_name)
@@ -240,7 +270,7 @@ class HUD:
             self.screen.blit(label_surf, (bx + 2, by - 1))
     
     def _render_spell_bars(self):
-        """Render spell bars at bottom center - one row per party member."""
+        """Render spell bars at bottom left - one row per party member (mobile thumb access)."""
         # Collect party members sorted by index
         party_members: List[Tuple[int, int, Optional[object]]] = []  # (party_index, entity, spellbook)
         
@@ -259,18 +289,19 @@ class HUD:
         # Sort by party index
         party_members.sort(key=lambda x: x[0])
         
-        # Layout constants
-        slot_size = 44
-        slot_spacing = 6
+        # Layout constants (scaled)
+        slot_size = self.s(44)
+        slot_spacing = self.s(6)
         num_slots = 5
-        row_height = 56
-        row_spacing = 8
+        row_height = self.s(56)
+        row_spacing = self.s(8)
         
-        bar_w = num_slots * (slot_size + slot_spacing) + 80  # Extra for label
+        bar_w = num_slots * (slot_size + slot_spacing) + self.s(80)  # Extra for label
         total_height = len(party_members) * row_height + (len(party_members) - 1) * row_spacing
         
-        bar_x = (self.screen.get_width() - bar_w) // 2
-        bar_y = self.screen.get_height() - total_height - 20
+        # Left-aligned for mobile thumb access
+        bar_x = self.s(20)
+        bar_y = self.screen.get_height() - total_height - self.s(20)
         
         for i, (party_idx, ent, spellbook, name, is_selected) in enumerate(party_members):
             row_y = bar_y + i * (row_height + row_spacing)
@@ -282,21 +313,21 @@ class HUD:
             
             # Selection indicator
             if is_selected:
-                pygame.draw.rect(self.screen, COLOR_UI_ACCENT, (bar_x, row_y, 4, row_height))
+                pygame.draw.rect(self.screen, COLOR_UI_ACCENT, (bar_x, row_y, self.s(4), row_height))
             
             # Character name label
             name_surf = self.font_small.render(name[:6], True, COLOR_TEXT_DIM)
-            self.screen.blit(name_surf, (bar_x + 8, row_y + 4))
+            self.screen.blit(name_surf, (bar_x + self.s(8), row_y + self.s(4)))
             
             # Get key bindings for this party member
             keys = SPELL_KEYS[party_idx] if party_idx < len(SPELL_KEYS) else ["?"] * 5
             
             # Render 5 spell slots
-            slots_start_x = bar_x + 70
+            slots_start_x = bar_x + self.s(70)
             
             for slot_idx in range(num_slots):
                 slot_x = slots_start_x + slot_idx * (slot_size + slot_spacing)
-                slot_y = row_y + 6
+                slot_y = row_y + self.s(6)
                 
                 # Slot background
                 has_spell = False
@@ -318,14 +349,14 @@ class HUD:
                 key_label = keys[slot_idx] if slot_idx < len(keys) else "?"
                 key_color = COLOR_UI_ACCENT if is_selected else COLOR_TEXT_DIM
                 key_surf = self.font_small.render(key_label, True, key_color)
-                self.screen.blit(key_surf, (slot_x + 3, slot_y + 2))
+                self.screen.blit(key_surf, (slot_x + self.s(3), slot_y + 2))
                 
                 # Spell icon (if has spell)
                 if has_spell and spell_id:
                     # Generate and draw procedural spell icon
-                    icon_size = slot_size - 8
+                    icon_size = slot_size - self.s(8)
                     spell_icon = icon_generator.get_spell_icon(spell_id, icon_size)
-                    self.screen.blit(spell_icon, (slot_x + 4, slot_y + 4))
+                    self.screen.blit(spell_icon, (slot_x + self.s(4), slot_y + self.s(4)))
                 
                 # Cooldown overlay
                 if cooldown > 0:
@@ -346,9 +377,9 @@ class HUD:
     
     def _render_minimap_placeholder(self):
         """Render minimap placeholder."""
-        map_size = 150
-        x = self.screen.get_width() - map_size - 20
-        y = 20
+        map_size = self.s(150)
+        x = self.screen.get_width() - map_size - self.s(20)
+        y = self.s(20)
         
         pygame.draw.rect(self.screen, COLOR_UI_BG, (x, y, map_size, map_size))
         pygame.draw.rect(self.screen, COLOR_UI_BORDER, (x, y, map_size, map_size), 2)
@@ -370,19 +401,21 @@ class HUD:
                 total_gold = gold.amount
                 break
         
-        x = self.screen.get_width() - 170
-        y = self.screen.get_height() - 50
+        box_w = self.s(150)
+        box_h = self.s(35)
+        x = self.screen.get_width() - box_w - self.s(20)
+        y = self.screen.get_height() - box_h - self.s(15)
         
-        pygame.draw.rect(self.screen, COLOR_UI_BG, (x, y, 150, 35))
-        pygame.draw.rect(self.screen, COLOR_UI_BORDER, (x, y, 150, 35), 2)
+        pygame.draw.rect(self.screen, COLOR_UI_BG, (x, y, box_w, box_h))
+        pygame.draw.rect(self.screen, COLOR_UI_BORDER, (x, y, box_w, box_h), 2)
         
         # Gold icon (circle)
-        pygame.draw.circle(self.screen, COLOR_GOLD, (x + 20, y + 17), 10)
+        pygame.draw.circle(self.screen, COLOR_GOLD, (x + self.s(20), y + box_h // 2), self.s(10))
         
         # Amount
         gold_text = f"{total_gold:,}"
         gold_surf = self.font_medium.render(gold_text, True, COLOR_GOLD)
-        self.screen.blit(gold_surf, (x + 40, y + 8))
+        self.screen.blit(gold_surf, (x + self.s(40), y + self.s(8)))
     
     def _render_fps(self, fps: float):
         """Render FPS counter."""

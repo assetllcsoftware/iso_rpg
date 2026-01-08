@@ -2895,6 +2895,174 @@ class PixelSpriteGenerator:
         
         return surf
     
+    # ==================== TOWN NPC SPRITES ====================
+    
+    def blacksmith_idle(self, frame=0):
+        """Blacksmith NPC - burly dwarf with hammer and apron."""
+        surf = self._create_surface(HERO_SIZE)
+        
+        y_off = 1 if frame % 2 == 0 else 0
+        
+        # Sturdy boots
+        self._draw_rect(surf, 12, 38 + y_off, 8, 6, (60, 40, 30))  # Brown boots
+        self._draw_rect(surf, 28, 38 + y_off, 8, 6, (60, 40, 30))
+        
+        # Thick legs (wide stance)
+        self._draw_rect(surf, 14, 30 + y_off, 6, 10, (80, 60, 40))  # Pants
+        self._draw_rect(surf, 28, 30 + y_off, 6, 10, (80, 60, 40))
+        
+        # Leather apron
+        self._draw_rect(surf, 12, 20 + y_off, 24, 14, (100, 70, 40))  # Brown apron
+        self._draw_rect(surf, 14, 22 + y_off, 20, 10, (80, 55, 35))  # Apron detail
+        
+        # Broad torso/chest
+        self._draw_rect(surf, 10, 14 + y_off, 28, 10, (40, 40, 45))  # Gray shirt
+        self._draw_rect(surf, 10, 14 + y_off, 28, 2, (60, 60, 70))  # Collar
+        
+        # Muscular arms
+        self._draw_rect(surf, 4, 16 + y_off, 6, 12, (180, 140, 100))  # Skin - left arm
+        self._draw_rect(surf, 38, 16 + y_off, 6, 12, (180, 140, 100))  # Right arm
+        
+        # Hammer in right hand
+        self._draw_rect(surf, 40, 26 + y_off, 4, 12, (90, 70, 50))  # Handle
+        self._draw_rect(surf, 38, 22 + y_off, 8, 6, (120, 120, 130))  # Hammer head
+        
+        # Head - bald/shaved with big beard
+        self._draw_rect(surf, 16, 4 + y_off, 16, 12, (180, 140, 100))  # Skin
+        
+        # Big bushy beard
+        self._draw_rect(surf, 14, 12 + y_off, 20, 10, (80, 50, 30))  # Brown beard
+        self._draw_rect(surf, 16, 14 + y_off, 16, 6, (100, 65, 40))  # Beard highlight
+        
+        # Eyes
+        self._draw_pixel(surf, 18, 7 + y_off, (30, 30, 30))
+        self._draw_pixel(surf, 28, 7 + y_off, (30, 30, 30))
+        
+        # Bald head shine
+        self._draw_rect(surf, 20, 2 + y_off, 8, 2, (200, 170, 130))
+        
+        return surf
+    
+    def alchemist_idle(self, frame=0):
+        """Alchemist NPC - thin old woman with pointed hat and potions."""
+        surf = self._create_surface(HERO_SIZE)
+        
+        y_off = 1 if frame % 2 == 0 else 0
+        bubble = frame % 3
+        
+        # Shoes
+        self._draw_rect(surf, 16, 40 + y_off, 6, 4, (50, 40, 60))
+        self._draw_rect(surf, 26, 40 + y_off, 6, 4, (50, 40, 60))
+        
+        # Long robe
+        self._draw_rect(surf, 14, 24 + y_off, 20, 18, (70, 50, 100))  # Purple robe
+        self._draw_rect(surf, 16, 26 + y_off, 16, 14, (90, 65, 120))  # Robe highlight
+        
+        # Belt with potion pouches
+        self._draw_rect(surf, 12, 24 + y_off, 24, 3, (60, 40, 30))  # Belt
+        self._draw_rect(surf, 10, 25 + y_off, 4, 6, (50, 150, 50))  # Green potion
+        self._draw_rect(surf, 34, 25 + y_off, 4, 6, (150, 50, 50))  # Red potion
+        
+        # Thin body
+        self._draw_rect(surf, 16, 16 + y_off, 16, 10, (70, 50, 100))
+        
+        # Arms (sleeves)
+        self._draw_rect(surf, 8, 18 + y_off, 6, 10, (70, 50, 100))
+        self._draw_rect(surf, 34, 18 + y_off, 6, 10, (70, 50, 100))
+        
+        # Hands holding vial
+        self._draw_rect(surf, 6, 26 + y_off, 4, 4, (200, 170, 140))  # Left hand
+        self._draw_rect(surf, 38, 26 + y_off, 4, 4, (200, 170, 140))  # Right hand
+        
+        # Bubbling vial in hand
+        self._draw_rect(surf, 4, 20 + y_off, 4, 8, (100, 200, 255))  # Blue liquid
+        self._draw_rect(surf, 3, 18 + y_off, 6, 3, (200, 200, 200))  # Vial top
+        if bubble > 0:
+            self._draw_pixel(surf, 5, 17 + y_off - bubble, (150, 220, 255))  # Bubble
+        
+        # Face - old woman
+        self._draw_rect(surf, 18, 6 + y_off, 12, 10, (200, 170, 140))  # Skin
+        
+        # Long gray hair
+        self._draw_rect(surf, 14, 8 + y_off, 4, 14, (150, 150, 160))  # Left hair
+        self._draw_rect(surf, 30, 8 + y_off, 4, 14, (150, 150, 160))  # Right hair
+        
+        # Pointy witch hat
+        pygame.draw.polygon(surf, (40, 30, 60), [
+            (24, 0), (14, 10 + y_off), (34, 10 + y_off)
+        ])  # Hat
+        self._draw_rect(surf, 12, 8 + y_off, 24, 3, (40, 30, 60))  # Brim
+        self._draw_rect(surf, 22, 2, 4, 4, (100, 80, 40))  # Hat buckle
+        
+        # Eyes - wise
+        self._draw_pixel(surf, 20, 9 + y_off, (60, 40, 80))
+        self._draw_pixel(surf, 28, 9 + y_off, (60, 40, 80))
+        
+        # Spectacles
+        self._draw_rect(surf, 18, 8 + y_off, 4, 3, (180, 180, 200))
+        self._draw_rect(surf, 26, 8 + y_off, 4, 3, (180, 180, 200))
+        
+        return surf
+    
+    def innkeeper_idle(self, frame=0):
+        """Innkeeper NPC - jolly portly man with mug and towel."""
+        surf = self._create_surface(HERO_SIZE)
+        
+        y_off = 1 if frame % 2 == 0 else 0
+        
+        # Shoes
+        self._draw_rect(surf, 14, 38 + y_off, 6, 6, (40, 30, 20))
+        self._draw_rect(surf, 28, 38 + y_off, 6, 6, (40, 30, 20))
+        
+        # Pants
+        self._draw_rect(surf, 14, 28 + y_off, 8, 12, (60, 50, 40))
+        self._draw_rect(surf, 26, 28 + y_off, 8, 12, (60, 50, 40))
+        
+        # Big belly/apron
+        self._draw_rect(surf, 10, 16 + y_off, 28, 16, (230, 220, 200))  # White apron
+        self._draw_rect(surf, 12, 18 + y_off, 24, 12, (240, 230, 210))  # Apron center
+        
+        # Vest
+        self._draw_rect(surf, 8, 14 + y_off, 6, 14, (140, 40, 40))  # Red vest left
+        self._draw_rect(surf, 34, 14 + y_off, 6, 14, (140, 40, 40))  # Red vest right
+        
+        # Arms
+        self._draw_rect(surf, 4, 16 + y_off, 6, 10, (200, 160, 120))  # Skin
+        self._draw_rect(surf, 38, 16 + y_off, 6, 10, (200, 160, 120))
+        
+        # Towel over shoulder
+        self._draw_rect(surf, 34, 10 + y_off, 8, 4, (230, 220, 200))
+        self._draw_rect(surf, 40, 12 + y_off, 4, 10, (230, 220, 200))
+        
+        # Beer mug in hand
+        self._draw_rect(surf, 2, 22 + y_off, 6, 8, (180, 140, 80))  # Wooden mug
+        self._draw_rect(surf, 0, 24 + y_off, 2, 4, (160, 120, 60))  # Handle
+        self._draw_rect(surf, 3, 20 + y_off, 4, 3, (255, 240, 200))  # Foam
+        
+        # Round happy face
+        self._draw_rect(surf, 14, 4 + y_off, 20, 12, (200, 160, 120))  # Face
+        
+        # Rosy cheeks
+        self._draw_rect(surf, 14, 10 + y_off, 4, 3, (220, 140, 130))
+        self._draw_rect(surf, 30, 10 + y_off, 4, 3, (220, 140, 130))
+        
+        # Eyes - squinty happy
+        self._draw_rect(surf, 18, 7 + y_off, 3, 2, (40, 30, 20))
+        self._draw_rect(surf, 27, 7 + y_off, 3, 2, (40, 30, 20))
+        
+        # Big smile
+        self._draw_rect(surf, 20, 12 + y_off, 8, 2, (40, 30, 20))
+        
+        # Bald with fringe
+        self._draw_rect(surf, 12, 6 + y_off, 4, 6, (100, 70, 50))  # Left hair
+        self._draw_rect(surf, 32, 6 + y_off, 4, 6, (100, 70, 50))  # Right hair
+        self._draw_rect(surf, 18, 2 + y_off, 12, 2, (200, 170, 130))  # Bald shine
+        
+        # Mustache
+        self._draw_rect(surf, 18, 10 + y_off, 12, 2, (100, 70, 50))
+        
+        return surf
+    
     # ==================== SPELL EFFECT SPRITES ====================
     
     def fireball_projectile(self, frame=0):

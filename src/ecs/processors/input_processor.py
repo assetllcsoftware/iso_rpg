@@ -66,11 +66,13 @@ class InputProcessor(esper.Processor):
             self.mouse_pos = event.pos
         
         elif event.type == pygame.MOUSEBUTTONDOWN:
-            self.mouse_buttons[event.button - 1] = True
-            self.mouse_clicked[event.button - 1] = True
+            if 1 <= event.button <= 3:  # Only track left, middle, right
+                self.mouse_buttons[event.button - 1] = True
+                self.mouse_clicked[event.button - 1] = True
         
         elif event.type == pygame.MOUSEBUTTONUP:
-            self.mouse_buttons[event.button - 1] = False
+            if 1 <= event.button <= 3:
+                self.mouse_buttons[event.button - 1] = False
         
         elif event.type == pygame.MOUSEWHEEL:
             self._handle_scroll(event.y)
@@ -143,6 +145,8 @@ class InputProcessor(esper.Processor):
     
     def _try_cast_spell_for_party_member(self, party_idx: int, slot: int):
         """Attempt to cast spell in given slot for a specific party member."""
+        from ...data.loader import data_loader
+        
         # Find the party member with this index
         for ent, (member,) in esper.get_components(PartyMember):
             if member.party_index == party_idx:
@@ -151,13 +155,20 @@ class InputProcessor(esper.Processor):
                     spellbook = esper.component_for_entity(ent, SpellBook)
                     spells = list(spellbook.known_spells)
                     if slot < len(spells):
-                        # Get target from mouse position
+                        spell_id = spells[slot]
+                        
+                        # Check spell targeting to filter valid targets
+                        spell_data = data_loader.get_spell(spell_id)
+                        targeting = spell_data.get("targeting", "enemy") if spell_data else "enemy"
+                        require_enemy = targeting == "enemy"
+                        
+                        # Get target from mouse position (filtered by targeting type)
                         world_x, world_y = self._screen_to_world(self.mouse_pos)
-                        target_id = self._get_entity_at(world_x, world_y)
+                        target_id = self._get_entity_at(world_x, world_y, require_enemy=require_enemy)
                         
                         self.event_bus.emit(Event(EventType.SPELL_CAST_REQUESTED, {
                             "caster": ent,
-                            "spell_id": spells[slot],
+                            "spell_id": spell_id,
                             "slot": slot,
                             "target_id": target_id,
                             "target_x": world_x,

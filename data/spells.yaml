@@ -142,24 +142,28 @@ fireball:
 
 ice_shard:
   id: ice_shard
-  name: "Ice Shard"
+  name: "Frost Wave"
   school: combat_magic
-  type: projectile
-  targeting: enemy
+  type: aoe
+  targeting: self
   damage: 20
   damage_type: ice
-  mana_cost: 12
-  cooldown: 1.5
-  range: 7.0
-  projectile_speed: 15.0
+  mana_cost: 30
+  cooldown: 12.0
+  radius: 8.0
+  animation: cast
+  animation_duration: 0.5
   effect:
-    type: slow
-    amount: 0.3
+    type: stun
     duration: 2.0
+  visual_effect:
+    type: expanding_ring
+    color: [120, 200, 255]
+    speed: 16.0
   unlock_level: 1
   tier: 1
   icon: spell_ice
-  description: "A shard of ice that slows the target."
+  description: "Unleash a wave of frost that stuns all nearby enemies!"
 
 lightning_bolt:
   id: lightning_bolt

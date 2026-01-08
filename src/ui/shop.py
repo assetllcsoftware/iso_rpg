@@ -35,17 +35,46 @@ class ShopUI:
         self.hover_shop_idx = -1
         self.shop_scroll = 0
         
+        # UI scaling
+        self._ui_scale = 1.0
+        self._base_font = 28
+        self._base_font_small = 22
+        self._base_font_title = 36
+        self._base_shop_w = 380
+        self._base_equip_w = 280
+        self._base_inv_w = 280
+        self._base_panel_h = 500
+        self._base_gap = 20
+        self._base_slot_size = 44
+        self._base_item_height = 55
+        
         # Fonts
         pygame.font.init()
-        self.font = pygame.font.Font(None, 28)
-        self.font_small = pygame.font.Font(None, 22)
-        self.font_title = pygame.font.Font(None, 36)
+        self._rebuild_fonts()
         
         # Layout - will be recalculated in render()
         self.left_panel = pygame.Rect(0, 0, 400, 500)
         
         # Generate shop inventory
         self.shop_items: List[dict] = []
+    
+    def _rebuild_fonts(self):
+        """Rebuild fonts with current scale."""
+        self.font = pygame.font.Font(None, int(self._base_font * self._ui_scale))
+        self.font_small = pygame.font.Font(None, int(self._base_font_small * self._ui_scale))
+        self.font_title = pygame.font.Font(None, int(self._base_font_title * self._ui_scale))
+    
+    def set_scale(self, scale: float):
+        """Set UI scale factor."""
+        if abs(scale - self._ui_scale) > 0.01:
+            self._ui_scale = scale
+            self._rebuild_fonts()
+            # Also update the embedded inventory UI scale
+            self.inventory_ui.set_scale(scale)
+    
+    def s(self, value: int) -> int:
+        """Scale a value by the UI scale factor."""
+        return int(value * self._ui_scale)
     
     def show(self, shop_type: str, dungeon_level: int = 1):
         """Open shop UI."""
@@ -271,9 +300,9 @@ class ShopUI:
         # Check party tabs in inventory UI
         for i, ent in enumerate(self.inventory_ui.party_entities):
             tab_rect = pygame.Rect(
-                self.inventory_ui.right_panel.x + i * 80, 
-                self.inventory_ui.right_panel.y - 35,
-                75, 30
+                self.inventory_ui.right_panel.x + i * self.s(80), 
+                self.inventory_ui.right_panel.y - self.s(35),
+                self.s(75), self.s(30)
             )
             if tab_rect.collidepoint(pos):
                 self.inventory_ui.selected_entity = ent
@@ -281,15 +310,15 @@ class ShopUI:
         
         # Check shop items (left panel - list view)
         if self.left_panel.collidepoint(pos):
-            item_height = 55
-            start_y = self.left_panel.y + 60
+            item_height = self.s(self._base_item_height)
+            start_y = self.left_panel.y + self.s(60)
             
             for i, item in enumerate(self.shop_items[self.shop_scroll:self.shop_scroll + 7]):
                 item_rect = pygame.Rect(
-                    self.left_panel.x + 10,
+                    self.left_panel.x + self.s(10),
                     start_y + i * item_height,
-                    self.left_panel.width - 20,
-                    item_height - 5
+                    self.left_panel.width - self.s(20),
+                    item_height - self.s(5)
                 )
                 if item_rect.collidepoint(pos):
                     self._buy_item(item)
@@ -313,32 +342,37 @@ class ShopUI:
         
         # Check shop items (list view)
         if self.left_panel.collidepoint(pos):
-            item_height = 55
-            start_y = self.left_panel.y + 60
+            item_height = self.s(self._base_item_height)
+            start_y = self.left_panel.y + self.s(60)
             for i in range(7):
                 item_rect = pygame.Rect(
-                    self.left_panel.x + 10,
+                    self.left_panel.x + self.s(10),
                     start_y + i * item_height,
-                    self.left_panel.width - 20,
-                    item_height - 5
+                    self.left_panel.width - self.s(20),
+                    item_height - self.s(5)
                 )
                 if item_rect.collidepoint(pos):
                     self.hover_shop_idx = self.shop_scroll + i
                     break
     
-    def render(self):
+    def render(self, camera_zoom: float = 1.0):
         """Render shop UI with 3 panels: Shop | Equipment | Inventory."""
         if not self.visible:
             return
         
+        # Update UI scale based on camera zoom
+        target_scale = camera_zoom / 1.0
+        target_scale = max(1.5, min(3.0, target_scale))
+        self.set_scale(target_scale)
+        
         screen_w, screen_h = self.screen.get_size()
         
         # 3-panel layout: Shop (left), Equipment (middle), Inventory (right)
-        shop_w = 380
-        equip_w = 280
-        inv_w = 280
-        panel_h = 500
-        gap = 20
+        shop_w = self.s(self._base_shop_w)
+        equip_w = self.s(self._base_equip_w)
+        inv_w = self.s(self._base_inv_w)
+        panel_h = self.s(self._base_panel_h)
+        gap = self.s(self._base_gap)
         
         total_w = shop_w + equip_w + inv_w + gap * 2
         start_x = (screen_w - total_w) // 2
@@ -371,12 +405,12 @@ class ShopUI:
             'alchemist': 'Alchemist - Potions'
         }
         title = self.font_title.render(shop_names.get(self.shop_type, 'Shop'), True, COLOR_TEXT)
-        self.screen.blit(title, (screen_w // 2 - title.get_width() // 2, self.left_panel.y - 50))
+        self.screen.blit(title, (screen_w // 2 - title.get_width() // 2, self.left_panel.y - self.s(50)))
         
         # Gold display
         gold = self._get_player_gold()
         gold_text = self.font.render(f"Gold: {gold}", True, COLOR_GOLD)
-        self.screen.blit(gold_text, (screen_w // 2 - gold_text.get_width() // 2, self.left_panel.y - 20))
+        self.screen.blit(gold_text, (screen_w // 2 - gold_text.get_width() // 2, self.left_panel.y - self.s(20)))
         
         # Party tabs (above equipment panel)
         self._render_party_tabs_top()
@@ -392,26 +426,26 @@ class ShopUI:
         
         # Instructions
         hint = self.font_small.render("Click item to buy/sell | TAB: switch character | ESC: close", True, COLOR_TEXT_DIM)
-        self.screen.blit(hint, (screen_w // 2 - hint.get_width() // 2, self.left_panel.bottom + 15))
+        self.screen.blit(hint, (screen_w // 2 - hint.get_width() // 2, self.left_panel.bottom + self.s(15)))
     
     def _setup_equip_panel_slots(self):
         """Setup equipment slot positions for the middle panel."""
         panel = self.equip_panel
         cx = panel.x + panel.width // 2
-        cy = panel.y + 200
-        slot_size = 44
+        cy = panel.y + self.s(200)
+        slot_size = self.s(self._base_slot_size)
         
         self.equip_slots = {
-            'head': pygame.Rect(cx - 22, cy - 100, slot_size, slot_size),
-            'amulet': pygame.Rect(cx + 35, cy - 70, slot_size, slot_size),
-            'chest': pygame.Rect(cx - 22, cy - 40, slot_size, slot_size),
-            'main_hand': pygame.Rect(cx - 75, cy - 30, slot_size, slot_size),
-            'off_hand': pygame.Rect(cx + 35, cy - 30, slot_size, slot_size),
-            'hands': pygame.Rect(cx - 75, cy + 25, slot_size, slot_size),
-            'ring_1': pygame.Rect(cx - 75, cy + 80, slot_size, slot_size),
-            'ring_2': pygame.Rect(cx + 35, cy + 80, slot_size, slot_size),
-            'legs': pygame.Rect(cx - 22, cy + 25, slot_size, slot_size),
-            'feet': pygame.Rect(cx - 22, cy + 80, slot_size, slot_size),
+            'head': pygame.Rect(cx - slot_size//2, cy - self.s(100), slot_size, slot_size),
+            'amulet': pygame.Rect(cx + self.s(35), cy - self.s(70), slot_size, slot_size),
+            'chest': pygame.Rect(cx - slot_size//2, cy - self.s(40), slot_size, slot_size),
+            'main_hand': pygame.Rect(cx - self.s(75), cy - self.s(30), slot_size, slot_size),
+            'off_hand': pygame.Rect(cx + self.s(35), cy - self.s(30), slot_size, slot_size),
+            'hands': pygame.Rect(cx - self.s(75), cy + self.s(25), slot_size, slot_size),
+            'ring_1': pygame.Rect(cx - self.s(75), cy + self.s(80), slot_size, slot_size),
+            'ring_2': pygame.Rect(cx + self.s(35), cy + self.s(80), slot_size, slot_size),
+            'legs': pygame.Rect(cx - slot_size//2, cy + self.s(25), slot_size, slot_size),
+            'feet': pygame.Rect(cx - slot_size//2, cy + self.s(80), slot_size, slot_size),
         }
     
     def _render_party_tabs_top(self):
@@ -420,22 +454,22 @@ class ShopUI:
         ent = self.inventory_ui.selected_entity
         
         for i, party_ent in enumerate(self.inventory_ui.party_entities):
-            tab_rect = pygame.Rect(panel.x + i * 90, panel.y - 40, 85, 32)
+            tab_rect = pygame.Rect(panel.x + i * self.s(90), panel.y - self.s(40), self.s(85), self.s(32))
             
             is_selected = party_ent == ent
             if is_selected:
-                pygame.draw.rect(self.screen, (80, 70, 100), tab_rect, border_radius=6)
-                pygame.draw.rect(self.screen, COLOR_UI_ACCENT, tab_rect, 2, border_radius=6)
+                pygame.draw.rect(self.screen, (80, 70, 100), tab_rect, border_radius=self.s(6))
+                pygame.draw.rect(self.screen, COLOR_UI_ACCENT, tab_rect, 2, border_radius=self.s(6))
             else:
-                pygame.draw.rect(self.screen, (50, 45, 60), tab_rect, border_radius=6)
-                pygame.draw.rect(self.screen, (80, 75, 95), tab_rect, 1, border_radius=6)
+                pygame.draw.rect(self.screen, (50, 45, 60), tab_rect, border_radius=self.s(6))
+                pygame.draw.rect(self.screen, (80, 75, 95), tab_rect, 1, border_radius=self.s(6))
             
             # Character name
             name = "???"
             if esper.has_component(party_ent, CharacterName):
                 name = esper.component_for_entity(party_ent, CharacterName).name
             name_surf = self.font_small.render(name[:10], True, COLOR_TEXT)
-            self.screen.blit(name_surf, (tab_rect.x + 8, tab_rect.y + 9))
+            self.screen.blit(name_surf, (tab_rect.x + self.s(8), tab_rect.y + self.s(9)))
     
     def _render_equipment_panel(self):
         """Render the equipment/paperdoll panel in the middle."""
@@ -445,18 +479,18 @@ class ShopUI:
         ent = self.inventory_ui.selected_entity
         
         # Background
-        pygame.draw.rect(self.screen, COLOR_UI_BG, panel, border_radius=10)
-        pygame.draw.rect(self.screen, (100, 150, 100), panel, 2, border_radius=10)  # Green for equipped
+        pygame.draw.rect(self.screen, COLOR_UI_BG, panel, border_radius=self.s(10))
+        pygame.draw.rect(self.screen, (100, 150, 100), panel, 2, border_radius=self.s(10))  # Green for equipped
         
         # Header with character name
         char_name = "Equipment"
         if ent >= 0 and esper.has_component(ent, CharacterName):
             char_name = f"{esper.component_for_entity(ent, CharacterName).name}'s Gear"
         header = self.font.render(char_name, True, COLOR_TEXT)
-        self.screen.blit(header, (panel.x + 10, panel.y + 10))
+        self.screen.blit(header, (panel.x + self.s(10), panel.y + self.s(10)))
         
         hint = self.font_small.render("(currently wearing)", True, COLOR_TEXT_DIM)
-        self.screen.blit(hint, (panel.x + 10, panel.y + 32))
+        self.screen.blit(hint, (panel.x + self.s(10), panel.y + self.s(32)))
         
         # Get equipment
         equipment = None
@@ -465,13 +499,13 @@ class ShopUI:
         
         # Draw character silhouette
         cx = panel.x + panel.width // 2
-        cy = panel.y + 200
+        cy = panel.y + self.s(200)
         # Simple humanoid outline
-        pygame.draw.circle(self.screen, (60, 60, 70), (cx, cy - 70), 25, 2)  # Head
-        pygame.draw.line(self.screen, (60, 60, 70), (cx, cy - 45), (cx, cy + 40), 2)  # Body
-        pygame.draw.line(self.screen, (60, 60, 70), (cx - 40, cy - 10), (cx + 40, cy - 10), 2)  # Arms
-        pygame.draw.line(self.screen, (60, 60, 70), (cx, cy + 40), (cx - 20, cy + 100), 2)  # Left leg
-        pygame.draw.line(self.screen, (60, 60, 70), (cx, cy + 40), (cx + 20, cy + 100), 2)  # Right leg
+        pygame.draw.circle(self.screen, (60, 60, 70), (cx, cy - self.s(70)), self.s(25), 2)  # Head
+        pygame.draw.line(self.screen, (60, 60, 70), (cx, cy - self.s(45)), (cx, cy + self.s(40)), 2)  # Body
+        pygame.draw.line(self.screen, (60, 60, 70), (cx - self.s(40), cy - self.s(10)), (cx + self.s(40), cy - self.s(10)), 2)  # Arms
+        pygame.draw.line(self.screen, (60, 60, 70), (cx, cy + self.s(40)), (cx - self.s(20), cy + self.s(100)), 2)  # Left leg
+        pygame.draw.line(self.screen, (60, 60, 70), (cx, cy + self.s(40)), (cx + self.s(20), cy + self.s(100)), 2)  # Right leg
         
         # Draw equipment slots
         slot_labels = {
@@ -480,6 +514,10 @@ class ShopUI:
             'hands': 'Gloves', 'legs': 'Legs', 'feet': 'Boots',
             'ring_1': 'Ring', 'ring_2': 'Ring'
         }
+        
+        # Track hovered item for tooltip (render AFTER all slots)
+        hovered_item_data = None
+        hovered_rect = None
         
         for slot_name, rect in self.equip_slots.items():
             item_id = None
@@ -496,27 +534,32 @@ class ShopUI:
                 rarity_color = RARITY_COLORS.get(rarity, (180, 180, 180))
                 
                 # Rarity border
-                inner = rect.inflate(-4, -4)
+                inner = rect.inflate(-self.s(4), -self.s(4))
                 pygame.draw.rect(self.screen, (*rarity_color[:3], 100), inner)
                 pygame.draw.rect(self.screen, rarity_color, inner, 2)
                 
                 # Icon
-                icon_size = rect.width - 8
+                icon_size = rect.width - self.s(8)
                 icon = icon_generator.get_item_icon(item_id, rarity, icon_size)
                 icon_rect = icon.get_rect(center=rect.center)
                 self.screen.blit(icon, icon_rect)
                 
-                # Hover tooltip
+                # Track hover for tooltip later
                 if rect.collidepoint(pygame.mouse.get_pos()):
                     pygame.draw.rect(self.screen, (255, 255, 255), rect, 2)
-                    self._render_equip_tooltip(item_data, rect)
+                    hovered_item_data = item_data
+                    hovered_rect = rect
             else:
                 # Empty slot label
                 label = self.font_small.render(slot_labels.get(slot_name, slot_name)[:3], True, (80, 80, 90))
-                self.screen.blit(label, (rect.x + 5, rect.y + rect.height // 2 - 6))
+                self.screen.blit(label, (rect.x + self.s(5), rect.y + rect.height // 2 - self.s(6)))
         
         # Stats summary at bottom
         self._render_stats_summary(panel, ent)
+        
+        # Render tooltip LAST (on top of everything)
+        if hovered_item_data:
+            self._render_equip_tooltip(hovered_item_data, hovered_rect)
     
     def _render_equip_tooltip(self, item_data: dict, slot_rect: pygame.Rect):
         """Render tooltip for equipped item."""
@@ -537,20 +580,20 @@ class ShopUI:
             line_colors.append((150, 200, 255))
         
         # Calculate tooltip size
-        padding = 8
-        line_height = 20
+        padding = self.s(8)
+        line_height = self.s(20)
         max_width = max(self.font_small.size(line)[0] for line in lines)
         tip_w = max_width + padding * 2
         tip_h = len(lines) * line_height + padding * 2
         
         # Position tooltip
-        tip_x = slot_rect.right + 5
+        tip_x = slot_rect.right + self.s(5)
         tip_y = slot_rect.y
         
         # Keep on screen
         screen_w = self.screen.get_width()
-        if tip_x + tip_w > screen_w - 10:
-            tip_x = slot_rect.left - tip_w - 5
+        if tip_x + tip_w > screen_w - self.s(10):
+            tip_x = slot_rect.left - tip_w - self.s(5)
         
         # Draw tooltip
         tip_rect = pygame.Rect(tip_x, tip_y, tip_w, tip_h)
@@ -568,8 +611,8 @@ class ShopUI:
         if ent < 0 or not esper.entity_exists(ent):
             return
         
-        y = panel.bottom - 100
-        x = panel.x + 15
+        y = panel.bottom - self.s(100)
+        x = panel.x + self.s(15)
         
         # Calculate total stats from equipment
         total_armor = 0
@@ -587,11 +630,11 @@ class ShopUI:
         stats_header = self.font_small.render("── Stats ──", True, COLOR_TEXT_DIM)
         self.screen.blit(stats_header, (panel.centerx - stats_header.get_width() // 2, y))
         
-        y += 22
+        y += self.s(22)
         armor_text = self.font_small.render(f"Total Armor: {total_armor}", True, (150, 200, 255))
         self.screen.blit(armor_text, (x, y))
         
-        y += 18
+        y += self.s(18)
         damage_text = self.font_small.render(f"Weapon Dmg: {total_damage}", True, (255, 180, 100))
         self.screen.blit(damage_text, (x, y))
     
@@ -600,20 +643,20 @@ class ShopUI:
         panel = self.left_panel
         
         # Background
-        pygame.draw.rect(self.screen, COLOR_UI_BG, panel, border_radius=10)
-        pygame.draw.rect(self.screen, COLOR_UI_ACCENT, panel, 2, border_radius=10)
+        pygame.draw.rect(self.screen, COLOR_UI_BG, panel, border_radius=self.s(10))
+        pygame.draw.rect(self.screen, COLOR_UI_ACCENT, panel, 2, border_radius=self.s(10))
         
         # Header
         header = self.font.render("FOR SALE", True, COLOR_TEXT)
-        self.screen.blit(header, (panel.x + 10, panel.y + 10))
+        self.screen.blit(header, (panel.x + self.s(10), panel.y + self.s(10)))
         
         # Subheader with count
         count_text = self.font_small.render(f"{len(self.shop_items)} items", True, COLOR_TEXT_DIM)
-        self.screen.blit(count_text, (panel.x + 10, panel.y + 35))
+        self.screen.blit(count_text, (panel.x + self.s(10), panel.y + self.s(35)))
         
         # Item list
-        item_height = 55
-        start_y = panel.y + 60
+        item_height = self.s(self._base_item_height)
+        start_y = panel.y + self.s(60)
         visible_count = min(7, len(self.shop_items) - self.shop_scroll)
         
         for i in range(visible_count):
@@ -623,19 +666,19 @@ class ShopUI:
             
             item = self.shop_items[idx]
             self._render_item_row(
-                panel.x + 10, start_y + i * item_height,
-                panel.width - 20, item_height - 5,
+                panel.x + self.s(10), start_y + i * item_height,
+                panel.width - self.s(20), item_height - self.s(5),
                 item, is_shop=True, hover=(idx == self.hover_shop_idx)
             )
         
         # Scroll indicators
         if self.shop_scroll > 0:
             arrow = self.font.render("▲ more", True, COLOR_TEXT_DIM)
-            self.screen.blit(arrow, (panel.centerx - arrow.get_width() // 2, panel.y + 55))
+            self.screen.blit(arrow, (panel.centerx - arrow.get_width() // 2, panel.y + self.s(55)))
         
         if self.shop_scroll + 7 < len(self.shop_items):
             arrow = self.font.render("▼ more", True, COLOR_TEXT_DIM)
-            self.screen.blit(arrow, (panel.centerx - arrow.get_width() // 2, panel.bottom - 25))
+            self.screen.blit(arrow, (panel.centerx - arrow.get_width() // 2, panel.bottom - self.s(25)))
     
     def _render_inventory_with_tabs(self):
         """Render inventory panel (no tabs, they're above equipment panel)."""
@@ -643,18 +686,18 @@ class ShopUI:
         ent = self.inventory_ui.selected_entity
         
         # Background panel
-        pygame.draw.rect(self.screen, COLOR_UI_BG, panel, border_radius=10)
-        pygame.draw.rect(self.screen, (150, 100, 50), panel, 2, border_radius=10)  # Sell color (orange)
+        pygame.draw.rect(self.screen, COLOR_UI_BG, panel, border_radius=self.s(10))
+        pygame.draw.rect(self.screen, (150, 100, 50), panel, 2, border_radius=self.s(10))  # Sell color (orange)
         
         # Header
         char_name = "Bag"
         if ent >= 0 and esper.has_component(ent, CharacterName):
             char_name = f"{esper.component_for_entity(ent, CharacterName).name}'s Bag"
         header = self.font.render(char_name, True, COLOR_TEXT)
-        self.screen.blit(header, (panel.x + 10, panel.y + 10))
+        self.screen.blit(header, (panel.x + self.s(10), panel.y + self.s(10)))
         
         hint = self.font_small.render("(click to sell)", True, COLOR_TEXT_DIM)
-        self.screen.blit(hint, (panel.x + 10, panel.y + 35))
+        self.screen.blit(hint, (panel.x + self.s(10), panel.y + self.s(35)))
         
         # Render inventory grid using InventoryUI's method (but we do it ourselves for sell mode)
         self._render_sell_inventory_grid()
@@ -677,6 +720,10 @@ class ShopUI:
             inv = esper.component_for_entity(ent, InventoryComp)
             items = inv.items
         
+        # Track hovered item for tooltip (render AFTER all slots)
+        hovered_item_data = None
+        hovered_rect = None
+        
         # Render slots
         for i, rect in enumerate(self.inventory_ui.inv_slots):
             # Slot background
@@ -692,12 +739,12 @@ class ShopUI:
                 rarity_color = RARITY_COLORS.get(rarity, (180, 180, 180))
                 
                 # Rarity highlight
-                inner = rect.inflate(-4, -4)
+                inner = rect.inflate(-self.s(4), -self.s(4))
                 pygame.draw.rect(self.screen, (*rarity_color[:3], 100), inner)
                 pygame.draw.rect(self.screen, rarity_color, inner, 2)
                 
                 # Icon
-                icon_size = self.inventory_ui.slot_size - 8
+                icon_size = self.inventory_ui.slot_size - self.s(8)
                 icon = icon_generator.get_item_icon(item_id, rarity, icon_size)
                 icon_rect = icon.get_rect(center=rect.center)
                 self.screen.blit(icon, icon_rect)
@@ -706,19 +753,23 @@ class ShopUI:
                 quantity = getattr(item, 'quantity', 1)
                 if quantity > 1:
                     qty_text = self.font_small.render(str(quantity), True, (255, 255, 255))
-                    qty_bg = pygame.Rect(rect.right - 16, rect.bottom - 14, 14, 12)
+                    qty_bg = pygame.Rect(rect.right - self.s(16), rect.bottom - self.s(14), self.s(14), self.s(12))
                     pygame.draw.rect(self.screen, (0, 0, 0), qty_bg)
-                    self.screen.blit(qty_text, (rect.right - 14, rect.bottom - 14))
+                    self.screen.blit(qty_text, (rect.right - self.s(14), rect.bottom - self.s(14)))
                 
-                # Hover highlight
+                # Hover highlight - track for tooltip later
                 if rect.collidepoint(pygame.mouse.get_pos()):
                     pygame.draw.rect(self.screen, (255, 255, 255), rect, 2)
-                    # Show tooltip
-                    self._render_sell_tooltip(item_data, rect)
+                    hovered_item_data = item_data
+                    hovered_rect = rect
         
         if len(items) == 0:
             empty = self.font_small.render("Inventory empty", True, COLOR_TEXT_DIM)
             self.screen.blit(empty, (panel.centerx - empty.get_width() // 2, panel.centery))
+        
+        # Render tooltip LAST (on top of everything)
+        if hovered_item_data:
+            self._render_sell_tooltip(hovered_item_data, hovered_rect)
     
     def _render_sell_tooltip(self, item_data: dict, slot_rect: pygame.Rect):
         """Render tooltip with sell price."""
@@ -745,11 +796,12 @@ class ShopUI:
         
         # Position
         mouse_pos = pygame.mouse.get_pos()
-        width = max(self.font_small.size(line)[0] for line in lines) + 20
-        height = len(lines) * 18 + 10
+        line_height = self.s(18)
+        width = max(self.font_small.size(line)[0] for line in lines) + self.s(20)
+        height = len(lines) * line_height + self.s(10)
         
-        x = min(mouse_pos[0] + 15, self.screen.get_width() - width - 10)
-        y = min(mouse_pos[1] + 15, self.screen.get_height() - height - 10)
+        x = min(mouse_pos[0] + self.s(15), self.screen.get_width() - width - self.s(10))
+        y = min(mouse_pos[1] + self.s(15), self.screen.get_height() - height - self.s(10))
         
         pygame.draw.rect(self.screen, (20, 18, 25), (x, y, width, height))
         pygame.draw.rect(self.screen, rarity_color, (x, y, width, height), 1)
@@ -757,7 +809,7 @@ class ShopUI:
         for i, line in enumerate(lines):
             color = line_colors[i] if i < len(line_colors) else COLOR_TEXT_DIM
             text = self.font_small.render(line, True, color)
-            self.screen.blit(text, (x + 10, y + 5 + i * 18))
+            self.screen.blit(text, (x + self.s(10), y + self.s(5) + i * line_height))
     
     def _render_item_row(self, x: int, y: int, w: int, h: int, 
                          item: dict, is_shop: bool, hover: bool):
@@ -772,13 +824,13 @@ class ShopUI:
         else:
             bg_color = (45, 42, 55)
         
-        pygame.draw.rect(self.screen, bg_color, rect, border_radius=5)
-        pygame.draw.rect(self.screen, rarity_color, rect, 1, border_radius=5)
+        pygame.draw.rect(self.screen, bg_color, rect, border_radius=self.s(5))
+        pygame.draw.rect(self.screen, rarity_color, rect, 1, border_radius=self.s(5))
         
         # Item name
         name = item.get('name', '???')
         name_surf = self.font_small.render(name, True, rarity_color)
-        self.screen.blit(name_surf, (x + 8, y + 5))
+        self.screen.blit(name_surf, (x + self.s(8), y + self.s(5)))
         
         # Item type/stats
         item_type = item.get('type', '')
@@ -806,7 +858,7 @@ class ShopUI:
         
         stat_str = " | ".join(stat_parts) if stat_parts else ""
         stat_surf = self.font_small.render(stat_str, True, COLOR_TEXT_DIM)
-        self.screen.blit(stat_surf, (x + 8, y + 25))
+        self.screen.blit(stat_surf, (x + self.s(8), y + self.s(25)))
         
         # Price
         price = item.get('price', 0)
@@ -818,5 +870,5 @@ class ShopUI:
             price_color = (200, 150, 50)
         
         price_surf = self.font_small.render(price_str, True, price_color)
-        self.screen.blit(price_surf, (rect.right - price_surf.get_width() - 8, y + 15))
+        self.screen.blit(price_surf, (rect.right - price_surf.get_width() - self.s(8), y + self.s(15)))
 

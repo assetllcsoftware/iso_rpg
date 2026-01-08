@@ -32,8 +32,15 @@ class Game:
     """Main game class - ties everything together."""
     
     def __init__(self):
-        # Initialize display (fullscreen)
-        self.screen = pygame.display.set_mode((0, 0), pygame.FULLSCREEN)
+        # Auto-detect monitor size and use 85% of it
+        display_info = pygame.display.Info()
+        monitor_w, monitor_h = display_info.current_w, display_info.current_h
+        
+        # Use 85% of monitor - works for any resolution
+        win_w = int(monitor_w * 0.85)
+        win_h = int(monitor_h * 0.85)
+        
+        self.screen = pygame.display.set_mode((win_w, win_h), pygame.RESIZABLE)
         pygame.display.set_caption("ML Siege")
         
         # Get actual screen size for camera/UI
@@ -384,9 +391,19 @@ class Game:
         """Handle entering town."""
         self.state = GameState.TOWN
         self.town_scene.show(dungeon_level=self.current_level)
+        # Disable fog of war for town (both minimap and renderer)
+        self.minimap.fog_of_war_enabled = False
+        self.minimap.set_dungeon(self.town_scene.town_map)
+        self.renderer.fog_enabled = False
     
     def _on_town_left(self, event):
         """Handle leaving town - restore positions, don't regenerate."""
+        # Re-enable fog of war for dungeon (both minimap and renderer)
+        self.minimap.fog_of_war_enabled = True
+        self.minimap.set_dungeon(self.dungeon)
+        self.renderer.fog_enabled = True
+        self.renderer.set_explored_tiles(self.minimap.explored)
+        
         # IMPORTANT: Set dungeon references BEFORE restoring positions
         # Otherwise PositionValidator might see dungeon positions as invalid
         # when checked against town_map
@@ -554,9 +571,13 @@ class Game:
                             equip.equip(slot, item_id)
         
         # Restore gold
+        print(f"[LOAD DEBUG] Restoring total_gold={total_gold}")
         for ent, (_, gold) in esper.get_components(PartyMember, Gold):
+            print(f"[LOAD DEBUG] Found party member with gold, setting to {total_gold}")
             gold.amount = total_gold
             break
+        else:
+            print("[LOAD DEBUG] WARNING: No party member with Gold component found!")
         
         # Center camera on player
         for ent, (pos, _, _) in esper.get_components(Position, PlayerControlled, Selected):
@@ -737,6 +758,8 @@ class Game:
                     self.ai_processor.set_dungeon(self.town_scene.town_map)
                     self.combat_processor.set_dungeon(self.town_scene.town_map)
                     self.magic_processor.set_dungeon(self.town_scene.town_map)
+                    # Disable world processor in town (prevents enemy spawning)
+                    self.world_processor.set_dungeon(None)
                     
                     # Run ECS - combat/AI will do nothing (no enemies in town)
                     esper.process(FIXED_TIMESTEP)
@@ -749,6 +772,7 @@ class Game:
                     self.ai_processor.set_dungeon(self.dungeon)
                     self.combat_processor.set_dungeon(self.dungeon)
                     self.magic_processor.set_dungeon(self.dungeon)
+                    self.world_processor.set_dungeon(self.dungeon)
                     
                     self.accumulator -= FIXED_TIMESTEP
                 
@@ -864,6 +888,16 @@ class Game:
         # Town uses same renderer/camera as dungeon
         if background_state == GameState.TOWN:
             self.town_scene.render(self.renderer, self.camera)
+            # Render HUD in town too (party portraits, health, gold, action bar)
+            self.hud.render(self.fps, self.camera.zoom)
+            # Action bar for potions
+            from .ecs.components import PlayerControlled, Selected
+            selected = -1
+            for ent, (_, _) in esper.get_components(PlayerControlled, Selected):
+                selected = ent
+                break
+            if selected >= 0:
+                self.action_bar.render(selected, self.camera.zoom)
             # If we're in inventory/skill tree in town, continue to render those overlays
             if self.state == GameState.TOWN:
                 self.notifications.render()
@@ -874,8 +908,8 @@ class Game:
         
         # Render HUD elements when not in full-screen menus
         if self.state != GameState.GAME_OVER:
-            self.hud.render(self.fps)
-            self.minimap.render()
+            self.hud.render(self.fps, self.camera.zoom)
+            self.minimap.render(camera_zoom=self.camera.zoom)
             
             # Get selected entity for action bar
             from .ecs.components import PlayerControlled, Selected
@@ -884,7 +918,7 @@ class Game:
                 selected = ent
                 break
             if selected >= 0:
-                self.action_bar.render(selected)
+                self.action_bar.render(selected, self.camera.zoom)
         
         # Render notifications
         self.notifications.render()
@@ -895,6 +929,6 @@ class Game:
         elif self.state == GameState.GAME_OVER:
             self.game_over_overlay.render()
         elif self.state == GameState.INVENTORY:
-            self.inventory_ui.render()
+            self.inventory_ui.render(self.camera.zoom)
         elif self.state == GameState.SKILL_TREE:
             self.skill_tree_ui.render()

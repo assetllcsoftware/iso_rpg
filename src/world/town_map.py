@@ -29,6 +29,9 @@ class TownBuilding:
 class TownMap:
     """Town map using same interface as Dungeon for rendering."""
     
+    # Flag to identify this as a town map (not a dungeon)
+    is_town_map: bool = True
+    
     def __init__(self, width: int = 40, height: int = 30):
         self.width = width
         self.height = height
@@ -36,11 +39,13 @@ class TownMap:
         self.buildings: List[TownBuilding] = []
         self.spawn_point: Tuple[int, int] = (width // 2, height // 2)
         
-        # Empty lists to match Dungeon interface
+        # Empty lists/values to match Dungeon interface
         self.rooms = []
         self.decorations = []
         self.room_props = []
         self.floor_decor = []
+        self.stairs_down = None  # No stairs in town
+        self.stairs_up = None
         
         self._generate()
     

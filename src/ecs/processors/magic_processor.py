@@ -72,6 +72,10 @@ class MagicProcessor(esper.Processor):
         if not esper.entity_exists(caster):
             return
         
+        # Can't cast while downed or dead
+        if esper.has_component(caster, Downed) or esper.has_component(caster, Dead):
+            return
+        
         # Check global cooldown - can't cast if on GCD
         if esper.has_component(caster, GlobalCooldown):
             gcd = esper.component_for_entity(caster, GlobalCooldown)
@@ -153,6 +157,11 @@ class MagicProcessor(esper.Processor):
     def _process_active_abilities(self, dt: float):
         """Process ongoing multi-hit abilities like whirlwind."""
         for ent, (pos, ability) in esper.get_components(Position, ActiveAbility):
+            # Cancel ability if downed or dead
+            if esper.has_component(ent, Downed) or esper.has_component(ent, Dead):
+                esper.remove_component(ent, ActiveAbility)
+                continue
+            
             ability.next_hit_timer -= dt
             ability.total_duration -= dt
             
@@ -211,6 +220,15 @@ class MagicProcessor(esper.Processor):
         import math
         
         for ent, (pos, leap) in esper.get_components(Position, LeapingAbility):
+            # Cancel leap if downed or dead
+            if esper.has_component(ent, Downed) or esper.has_component(ent, Dead):
+                esper.remove_component(ent, LeapingAbility)
+                # Reset render offset
+                if esper.has_component(ent, RenderOffset):
+                    offset = esper.component_for_entity(ent, RenderOffset)
+                    offset.y = -16
+                continue
+            
             leap.elapsed += dt
             progress = min(1.0, leap.elapsed / leap.duration)
             
@@ -408,6 +426,11 @@ class MagicProcessor(esper.Processor):
         for ent, (pos, intent, spellbook, mana) in esper.get_components(
             Position, CastIntent, SpellBook, Mana
         ):
+            # Can't cast while downed or dead
+            if esper.has_component(ent, Downed) or esper.has_component(ent, Dead):
+                esper.remove_component(ent, CastIntent)
+                continue
+            
             spell_id = intent.spell_id
             if not spell_id:
                 esper.remove_component(ent, CastIntent)
@@ -434,16 +457,30 @@ class MagicProcessor(esper.Processor):
             spell_range = spell_data.get("range", 8.0)
             targeting = spell_data.get("targeting", "enemy")
             
-            # FIRST: Validate existing target has LOS (before we do anything else)
-            # This catches cases where player clicked through a wall
+            # FIRST: Validate existing target for enemy-targeting spells
             if intent.target_id >= 0 and targeting == "enemy":
+                # Check target exists and is valid
                 if esper.entity_exists(intent.target_id) and esper.has_component(intent.target_id, Position):
                     target_pos = esper.component_for_entity(intent.target_id, Position)
-                    if self.dungeon and not self.dungeon.has_line_of_sight(
+                    
+                    # Check if target is actually an enemy (not ally/self)
+                    is_caster_party = esper.has_component(ent, PartyMember)
+                    is_target_party = esper.has_component(intent.target_id, PartyMember)
+                    is_target_enemy = esper.has_component(intent.target_id, Enemy)
+                    
+                    # Party members can only target enemies, enemies can only target party
+                    valid_target = (is_caster_party and is_target_enemy) or (not is_caster_party and is_target_party)
+                    
+                    if not valid_target:
+                        # Clicked on ally/self - clear and auto-find enemy
+                        intent.target_id = -1
+                    elif self.dungeon and not self.dungeon.has_line_of_sight(
                         pos.x, pos.y, target_pos.x, target_pos.y
                     ):
                         # Target was selected through a wall - clear and auto-find
                         intent.target_id = -1
+                else:
+                    intent.target_id = -1
             
             # Auto-find target if not specified (or if we cleared invalid target above)
             if intent.target_id < 0 and targeting == "enemy":
@@ -540,6 +577,11 @@ class MagicProcessor(esper.Processor):
     def _process_casting(self, dt: float):
         """Update active spell casts."""
         for ent, (pos, casting) in esper.get_components(Position, Casting):
+            # Cancel cast if downed or dead
+            if esper.has_component(ent, Downed) or esper.has_component(ent, Dead):
+                esper.remove_component(ent, Casting)
+                continue
+            
             casting.cast_time -= dt
             
             if casting.cast_time <= 0:
@@ -566,7 +608,7 @@ class MagicProcessor(esper.Processor):
         
         elif spell_type == "aoe":
             # AoE can also have damage_multiplier for melee abilities like whirlwind
-            if spell_data.get("targeting") == "self":
+            if spell_data.get("targeting") == "self" and spell_data.get("school") == "melee":
                 self._apply_melee_aoe(caster, spell_data, intent, caster_pos)
             else:
                 self._create_aoe(caster, spell_id, spell_data, intent, caster_pos)
@@ -738,8 +780,12 @@ class MagicProcessor(esper.Processor):
         
         scaled_heal = calculate_heal_amount(heal_value, intelligence, skill_level)
         
-        # Heal all party members
+        # Heal all party members (skip downed - they can't be healed until revived)
         for ent, (member, health) in esper.get_components(PartyMember, Health):
+            # Skip downed or dead party members
+            if esper.has_component(ent, Downed) or esper.has_component(ent, Dead):
+                continue
+            
             old_health = health.current
             health.current = min(health.maximum, health.current + scaled_heal)
             actual_heal = health.current - old_health
@@ -770,9 +816,12 @@ class MagicProcessor(esper.Processor):
         duration = spell_data.get("duration", 0.0)
         damage = spell_data.get("damage", 20)
         damage_type = spell_data.get("damage_type", "fire")
+        targeting = spell_data.get("targeting", "enemy")
         
-        # Target position
-        if intent.target_id >= 0 and esper.entity_exists(intent.target_id):
+        # Target position - for self-targeting, always use caster position
+        if targeting == "self":
+            tx, ty = caster_pos.x, caster_pos.y
+        elif intent.target_id >= 0 and esper.entity_exists(intent.target_id):
             target_pos = esper.component_for_entity(intent.target_id, Position)
             tx, ty = target_pos.x, target_pos.y
         else:
@@ -780,6 +829,30 @@ class MagicProcessor(esper.Processor):
         
         # Instant AoE damage
         self._apply_aoe_damage(caster, tx, ty, radius, damage, damage_type, spell_data)
+        
+        # Create visual effect
+        vis_data = spell_data.get("visual_effect", {})
+        vis_type = vis_data.get("type", f"aoe_{damage_type}")
+        vis_color = vis_data.get("color")
+        vis_speed = vis_data.get("speed", 0.0)
+        
+        vis_duration = 0.5
+        if vis_speed > 0:
+            vis_duration = radius / vis_speed
+        elif duration > 0:
+            vis_duration = duration
+        
+        # Create visual effect entity (always runs)
+        esper.create_entity(
+            Position(x=tx, y=ty),
+            VisualEffect(
+                effect_type=vis_type, 
+                timer=vis_duration,
+                duration=vis_duration,
+                radius=radius,
+                color=vis_color
+            )
+        )
         
         # Create persistent effect if has duration
         if duration > 0:
@@ -797,8 +870,7 @@ class MagicProcessor(esper.Processor):
                     next_tick=tick_interval,
                     damage_per_tick=tick_damage,
                     damage_type=damage_type
-                ),
-                VisualEffect(effect_type=f"aoe_{damage_type}", timer=duration)
+                )
             )
     
     def _apply_aoe_damage(self, caster: int, cx: float, cy: float, radius: float,
@@ -831,16 +903,23 @@ class MagicProcessor(esper.Processor):
             self._apply_spell_damage(caster, ent, spell_data)
     
     def _apply_chain_effect(self, caster: int, spell_data: dict, intent):
-        """Apply chain lightning effect."""
-        targets = spell_data.get("targets", 3)
+        """Apply chain lightning effect with visual bolts."""
+        import random
+        from ..components.rendering import LightningBolt
+        
+        targets = spell_data.get("chain_count", spell_data.get("targets", 3))
         damage = spell_data.get("damage", 25)
         chain_range = spell_data.get("chain_range", 5.0)
-        damage_falloff = spell_data.get("damage_falloff", 0.8)
+        damage_falloff = spell_data.get("chain_damage_falloff", spell_data.get("damage_falloff", 0.8))
         
         is_caster_party = esper.has_component(caster, PartyMember)
         hit_entities = set()
         current_target = intent.target_id
         current_damage = damage
+        
+        # Track positions for lightning bolts
+        caster_pos = esper.component_for_entity(caster, Position)
+        prev_x, prev_y = caster_pos.x, caster_pos.y
         
         for _ in range(targets):
             if current_target < 0 or not esper.entity_exists(current_target):
@@ -851,13 +930,33 @@ class MagicProcessor(esper.Processor):
             
             hit_entities.add(current_target)
             
+            # Get target position for lightning bolt
+            target_pos = esper.component_for_entity(current_target, Position)
+            
+            # Create lightning bolt visual from prev position to this target
+            bolt_segments = self._generate_lightning_segments(
+                prev_x, prev_y, target_pos.x, target_pos.y, 
+                num_segments=8, jitter=0.3
+            )
+            esper.create_entity(
+                LightningBolt(
+                    start_x=prev_x, start_y=prev_y,
+                    end_x=target_pos.x, end_y=target_pos.y,
+                    timer=0.4,
+                    segments=bolt_segments
+                )
+            )
+            
             # Apply damage
             modified_spell_data = dict(spell_data)
             modified_spell_data["damage"] = current_damage
             self._apply_spell_damage(caster, current_target, modified_spell_data)
             
+            # Update prev position for next bolt
+            prev_x, prev_y = target_pos.x, target_pos.y
+            
             # Find next target
-            current_pos = esper.component_for_entity(current_target, Position)
+            current_pos = target_pos
             next_target = -1
             next_dist = float('inf')
             
@@ -869,7 +968,8 @@ class MagicProcessor(esper.Processor):
                 if is_caster_party == is_target_party:
                     continue
                 
-                if esper.has_component(ent, Dead):
+                # Skip dead or downed entities
+                if esper.has_component(ent, Dead) or esper.has_component(ent, Downed):
                     continue
                 
                 dist = distance(pos.x, pos.y, current_pos.x, current_pos.y)
@@ -884,6 +984,42 @@ class MagicProcessor(esper.Processor):
             
             current_target = next_target
             current_damage = int(current_damage * damage_falloff)
+    
+    def _generate_lightning_segments(self, x1: float, y1: float, x2: float, y2: float,
+                                      num_segments: int = 8, jitter: float = 0.3) -> list:
+        """Generate jagged lightning bolt points between two positions."""
+        import random
+        import math
+        
+        points = [(x1, y1)]
+        
+        dx = x2 - x1
+        dy = y2 - y1
+        length = math.sqrt(dx*dx + dy*dy)
+        
+        if length < 0.1:
+            return [(x1, y1), (x2, y2)]
+        
+        # Perpendicular vector for jitter
+        perp_x = -dy / length
+        perp_y = dx / length
+        
+        for i in range(1, num_segments):
+            t = i / num_segments
+            # Base position along line
+            px = x1 + dx * t
+            py = y1 + dy * t
+            
+            # Add perpendicular jitter (decreases near endpoints)
+            edge_factor = 1.0 - abs(t - 0.5) * 2  # 0 at ends, 1 in middle
+            offset = random.uniform(-jitter, jitter) * edge_factor
+            px += perp_x * offset
+            py += perp_y * offset
+            
+            points.append((px, py))
+        
+        points.append((x2, y2))
+        return points
     
     def _apply_buff(self, caster: int, spell_data: dict, intent):
         """Apply a buff spell."""
@@ -972,16 +1108,27 @@ class MagicProcessor(esper.Processor):
         if target_id < 0 or not esper.entity_exists(target_id):
             return
         
-        # Get caster's weapon damage
+        # Get caster's weapon damage - read directly from Equipment for accuracy
         base_damage = 10
         if esper.has_component(caster, Attributes):
             attrs = esper.component_for_entity(caster, Attributes)
             base_damage += attrs.strength // 2
         
-        from ..components import Weapon, CombatStats
-        if esper.has_component(caster, Weapon):
+        from ..components import Weapon, CombatStats, Equipment
+        
+        # First try to get damage from currently equipped weapon (most accurate)
+        if esper.has_component(caster, Equipment):
+            equip = esper.component_for_entity(caster, Equipment)
+            main_hand = equip.get('main_hand')
+            if main_hand:
+                item_data = data_loader.get_item(main_hand)
+                if item_data and item_data.get('damage'):
+                    base_damage = item_data['damage']
+        # Fallback to Weapon component
+        elif esper.has_component(caster, Weapon):
             weapon = esper.component_for_entity(caster, Weapon)
             base_damage = weapon.damage
+        # Fallback to CombatStats
         elif esper.has_component(caster, CombatStats):
             stats = esper.component_for_entity(caster, CombatStats)
             base_damage = stats.damage
@@ -1175,16 +1322,27 @@ class MagicProcessor(esper.Processor):
         radius = spell_data.get("radius", 2.5)
         multiplier = spell_data.get("damage_multiplier", 1.0)
         
-        # Get caster's weapon damage
+        # Get caster's weapon damage - read directly from Equipment for accuracy
         base_damage = 10
         if esper.has_component(caster, Attributes):
             attrs = esper.component_for_entity(caster, Attributes)
             base_damage += attrs.strength // 2
         
-        from ..components import Weapon, CombatStats
-        if esper.has_component(caster, Weapon):
+        from ..components import Weapon, CombatStats, Equipment
+        
+        # First try to get damage from currently equipped weapon (most accurate)
+        if esper.has_component(caster, Equipment):
+            equip = esper.component_for_entity(caster, Equipment)
+            main_hand = equip.get('main_hand')
+            if main_hand:
+                item_data = data_loader.get_item(main_hand)
+                if item_data and item_data.get('damage'):
+                    base_damage = item_data['damage']
+        # Fallback to Weapon component
+        elif esper.has_component(caster, Weapon):
             weapon = esper.component_for_entity(caster, Weapon)
             base_damage = weapon.damage
+        # Fallback to CombatStats
         elif esper.has_component(caster, CombatStats):
             stats = esper.component_for_entity(caster, CombatStats)
             base_damage = stats.damage
@@ -1563,6 +1721,10 @@ class MagicProcessor(esper.Processor):
     
     def _apply_spell_damage(self, caster: int, target: int, spell_data: dict):
         """Apply spell damage to a target (for non-projectile spells that need scaling)."""
+        # Skip dead/downed targets
+        if esper.has_component(target, Dead) or esper.has_component(target, Downed):
+            return
+        
         # Skip if caster and target are same faction (no friendly fire)
         caster_is_player = esper.has_component(caster, PartyMember)
         target_is_player = esper.has_component(target, PartyMember)
@@ -1627,6 +1789,32 @@ class MagicProcessor(esper.Processor):
             "amount": final_damage,
             "damage_type": damage_type
         }))
+        
+        # Apply status effect if present
+        effect_data = spell_data.get("effect", {})
+        effect_type = effect_data.get("type", "")
+        if effect_type:
+            effect_duration = effect_data.get("duration", 1.0)
+            
+            status_effect = StatusEffect(
+                effect_type=effect_type,
+                duration=effect_duration,
+                source_id=caster,
+                damage_per_second=effect_data.get("damage_per_second", 0.0),
+                slow_amount=effect_data.get("slow_amount", 0.0)
+            )
+            
+            if esper.has_component(target, StatusEffects):
+                effects = esper.component_for_entity(target, StatusEffects)
+                effects.add(status_effect)
+            else:
+                esper.add_component(target, StatusEffects(effects=[status_effect]))
+            
+            self.event_bus.emit(Event(EventType.STATUS_APPLIED, {
+                "source": caster,
+                "target": target,
+                "effect_type": effect_type
+            }))
     
     def _update_projectiles(self, dt: float):
         """Update projectile positions and check for hits.
